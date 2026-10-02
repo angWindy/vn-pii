@@ -20,7 +20,7 @@ flowchart TD
     INDEX --> FIX[fixtures/{gold,negative}/<br/>]
 
     AGENTS --> RULES[.claude/rules/<br/>pii-guard · no-commit-gold · conda-env-pa1]
-    PLAN --> CURSOR[(.cursor/plans/<br/>detailed plan snapshot)]
+    PLAN --> CURSOR[(docs/PLAN.md<br/>design decisions<br/>+ slices)]
 
     SRC --> CLI[cli.py · guard.py]
     CLI --> DET[detectors/<br/>column_name · content_regex · luhn_card · free_text]
@@ -75,5 +75,4 @@ flowchart TD
 
 ## External links
 
-- Detailed plan snapshot: `.cursor/plans/pa1_pii_linter_slice_1_(v3_-_flat_root_+_ecc_+_docs)_2cfee7f3.plan.md`
-- ECC rules: `.claude/rules/{pii-guard,no-commit-gold,conda-env-pa1}.md`
+- Design decisions, architecture, slices: [`docs/PLAN.md`](docs/PLAN.md)
