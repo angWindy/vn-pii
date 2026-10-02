@@ -5,36 +5,53 @@ email, card Luhn, VIN/plate, Zalo handle, free-text blobs) in CSV / JSONL /
 Markdown datasets. Designed to wrap both `git` (pre-commit) and AI-agent
 commands (Cursor, Aider, Claude Code).
 
-> **Status:** Slice 1 MVP. Synthetic fixtures only. See [docs/spec.md](docs/spec.md)
-> for the public API and [docs/problem/PA1/PA1.md](docs/problem/PA1/PA1.md) for
-> the original problem statement.
+> **Status:** Slice 2 (zero-dep distribution). One-command install:
+> `pip install git+https://github.com/anthang2003/vn-pii`. No runtime
+> dependencies. Python 3.11+ required.
+>
+> See [docs/spec.md](docs/spec.md) for the public API and
+> [docs/problem/PA1/PA1.md](docs/problem/PA1/PA1.md) for the original
+> problem statement.
+
+## Quick start — Use in any project
+
+```bash
+pip install git+https://github.com/anthang2003/vn-pii
+pa1-lint scan path/to/your/dataset
+pa1-lint scan path/to/your/dataset --suppressions suppressions.toml
+```
+
+That is the whole install story. The tool pulls **zero** extra packages
+because the suppressions loader uses Python 3.11's stdlib `tomllib`.
 
 ## Quick start — Contributor
 
 ```bash
-conda env create -f environment.yml && conda activate pa1
+git clone https://github.com/anthang2003/vn-pii
+cd vn-pii
 pip install -e .[dev]
 python fixtures/generators/make_synthetic.py --out gold negative
 pa1-lint scan fixtures/gold
 pytest tests/
 ```
 
-## Quick start — End user
+The optional `[dev]` extra pulls `Faker` (for the fixture generator) and
+`pytest`. They are not part of the runtime footprint.
 
-```bash
-conda create -n pa1 python=3.10 -y && conda activate pa1
-pip install -e .                       # local install; PyPI version forthcoming
-cp examples/pre-commit-config.yaml /your/repo/.pre-commit-config.yaml
-pip install pre-commit && pre-commit install
-```
+## Quick start — Pre-commit hook in a downstream repo
 
-From now on every `git commit` in the user's repo that touches CSV / JSONL /
-Markdown files is scanned; the commit is blocked if HIGH+ findings appear.
+1. `pip install pa1-pii-linter` (or `pip install git+https://...`).
+2. Copy [examples/pre-commit-config.yaml](examples/pre-commit-config.yaml)
+   into your repo as `.pre-commit-config.yaml`.
+3. `pip install pre-commit && pre-commit install`.
+
+From now on every `git commit` that touches CSV / JSONL / Markdown is
+scanned. The commit is blocked if HIGH+ findings appear.
 
 To wrap an AI agent command:
 
 ```bash
-pa1-lint guard -- aider --message "..."
+pa1-lint guard -- aider --message "summarise repo"
 ```
 
 ## Layout
@@ -47,23 +64,23 @@ pa1-lint guard -- aider --message "..."
 | `examples/` | copy-paste configs |
 | `docs/` | architecture, contributing, detectors, spec, user-guide |
 | `.pre-commit-hooks.yaml` | hook defs exposed to other repos |
-| `suppressions.yaml` | example suppressions file |
-| `CLAUDE.md`, `AGENTS.md`, `.claude/rules/` | AI-agent onboarding (ECC) |
+| `suppressions.toml` | example suppressions file (TOML) |
+| `AGENTS.md`, `.claude/rules/` | AI-agent onboarding (ECC) |
 
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — system layout + data flow
 - [docs/contributing.md](docs/contributing.md) — add a new detector or entity
-- [docs/detectors.md](docs/detectors.md) — regex/Luhn reference
-- [docs/spec.md](docs/spec.md) — public API + exit codes
+- [docs/detectors.md](docs/detectors.md) — regex / Luhn reference
+- [docs/spec.md](docs/spec.md) — public API + exit codes + TOML schema
 - [docs/user-guide.md](docs/user-guide.md) — install, suppressions, FAQ
 - [docs/problem/PA1/PA1.md](docs/problem/PA1/PA1.md) — original problem statement
 
 ## Safety
 
 - **All fixtures are synthetic.** Do not point `pa1-lint scan` at real
-  customer data; the report intentionally shows masked evidence but the scan
-  keeps raw evidence in memory.
+  customer data; the report intentionally shows masked evidence but the
+  scan keeps raw evidence in memory.
 - **Never suppress real customer data.** Suppressions exist for clearly
   synthetic prefixes (`id_`, `dummy_`, `0`-padded accounts).
 

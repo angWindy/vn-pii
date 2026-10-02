@@ -36,19 +36,6 @@ _TARGET_EXTS = {".csv", ".jsonl", ".md"}
 _MD_TABLE_LINE = re.compile(r"^\s*\|.*\|\s*$")
 
 
-def _in_pa1_env() -> bool:
-    """Return True if we are running inside the ``pa1`` conda env."""
-    sys_prefix = (sys.prefix or "").lower()
-    return ("pa1" in sys_prefix) or ("envs/pa1" in sys_prefix)
-
-
-def _env_fail() -> None:
-    sys.stderr.write(
-        "pa1-lint: not running in conda env 'pa1'. "
-        "Activate it first:  conda activate pa1\n"
-    )
-
-
 def _list_files(root: Path) -> Iterable[Path]:
     """Yield target files up to depth ``_MAX_DEPTH``.
 
@@ -254,7 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan.add_argument(
         "--suppressions",
         default=None,
-        help="Path to a suppressions.yaml file.",
+        help="Path to a suppressions.toml file.",
     )
     p_scan.set_defaults(func=_cmd_scan)
 
@@ -271,9 +258,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if not _in_pa1_env():
-        _env_fail()
-        return 3
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

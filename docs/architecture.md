@@ -33,7 +33,7 @@ flowchart LR
   D --> H
   E --> H
   F --> H
-  B --> I[suppressions.yaml]
+  B --> I[suppressions.toml]
   I -- match --> G((skip))
   H --> J[report.render_markdown]
   H --> K[report JSON]
@@ -43,7 +43,7 @@ flowchart LR
 2. For each cell value, it computes `ColumnHints` from the column header.
 3. It runs detectors in order: Luhn → content regex → free-text combo.
 4. Suppressions short-circuit findings whose column + value prefix + owner
-   match an active entry.
+   match an active entry in `suppressions.toml`.
 5. Reporters render `Finding`s grouped by file. Reporters never see
    `evidence_raw`.
 
@@ -90,15 +90,18 @@ pii_linter
 `cli` and `guard` depend on every other layer. Detectors and `report` are
 pure and side-effect-free.
 
-## Why a conda env?
+## Why a Python 3.11 floor?
 
-`pa1-lint` requires `pyyaml`, plus the optional `[fixture]` extra
-(`Faker`) for regenerating fixtures. Pinning these in `environment.yml`
-gives every contributor and CI runner the same toolchain. The fail-fast
-check (`pa1` in `sys.prefix`) ensures nobody accidentally runs the
-scanner against real data from the wrong environment.
+`pa1-lint` has **zero runtime dependencies**: `tomllib` (which parses
+`suppressions.toml`) and the rest of the loaders are part of Python
+3.11+ stdlib. The optional `[fixture]` extra (`Faker`) is only needed
+to regenerate fixtures, not to run scans.
 
-## What is NOT in slice 1
+Pinning to 3.11 means `pip install` pulls nothing else. Pinning to the
+exact toolchain in `environment.yml` still gives every contributor the
+same `Faker` + `pytest` versions when regenerating fixtures.
+
+## What is NOT in slice 2
 
 - Cross-file correlation (e.g. same phone across two files).
 - Presidio integration (only used if precision becomes a problem).

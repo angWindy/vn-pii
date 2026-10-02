@@ -8,6 +8,7 @@ from pii_linter.cli import scan_path
 
 
 FIX_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
+SUPPRESSIONS = FIX_ROOT.parent / "suppressions.toml"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -25,24 +26,20 @@ def ensure_fixtures() -> None:
 
 
 def test_gold_leads_has_phone_findings() -> None:
-    result = scan_path(FIX_ROOT / "gold",
-                       suppressions_path=FIX_ROOT.parent / "suppressions.yaml")
+    result = scan_path(FIX_ROOT / "gold", suppressions_path=SUPPRESSIONS)
     assert any(f.entity == "PHONE" for f in result.findings)
 
 
 def test_gold_finance_has_card_findings() -> None:
-    result = scan_path(FIX_ROOT / "gold",
-                       suppressions_path=FIX_ROOT.parent / "suppressions.yaml")
+    result = scan_path(FIX_ROOT / "gold", suppressions_path=SUPPRESSIONS)
     assert any(f.entity == "CARD_NO" for f in result.findings)
 
 
 def test_negative_aggregate_is_clean() -> None:
-    result = scan_path(FIX_ROOT / "negative",
-                       suppressions_path=FIX_ROOT.parent / "suppressions.yaml")
+    result = scan_path(FIX_ROOT / "negative", suppressions_path=SUPPRESSIONS)
     assert result.findings == []
 
 
 def test_negative_crm_pipeline_is_clean() -> None:
-    result = scan_path(FIX_ROOT / "negative",
-                       suppressions_path=FIX_ROOT.parent / "suppressions.yaml")
+    result = scan_path(FIX_ROOT / "negative", suppressions_path=SUPPRESSIONS)
     assert result.findings == []

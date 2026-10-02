@@ -1,31 +1,32 @@
 """Suppressions loader for PA1.
 
-A suppression is a YAML record that says: "values matching this column
+A suppression is a TOML record that says: "values matching this column
 pattern and starting with this synthetic prefix on or before ``expires_at``
 should not trigger findings". This is for clearly-synthetic datasets that
 look like PII columns but contain Faker-seeded IDs.
 
-Example ``suppressions.yaml``::
+Example ``suppressions.toml``::
 
-    suppressions:
-        - column_pattern: customer_id
-          value_prefix: "id_"
-          owner: synth-data-team
-          expires_at: 2027-12-31
-          reason: Faker seed 42; verified by /tests/test_smoke.py
+    [[suppressions]]
+        column_pattern = "customer_id"
+        value_prefix = "id_"
+        owner = "synth-data-team"
+        expires_at = 2027-12-31
+        reason = "Faker seed 42; verified by /tests/test_smoke.py"
 
-If the file is missing or empty, no suppression is applied.
+If the file is missing or empty, no suppression is applied. Slice 2 made
+this loader zero-dependency by using ``tomllib`` (Python 3.11+ stdlib)
+instead of ``PyYAML``.
 """
 
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable
-
-import yaml
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class Suppression:
 
 
 def load_suppressions(path: Path | str) -> list[Suppression]:
-    """Load and validate a ``suppressions.yaml`` file.
+    """Load and validate a ``suppressions.toml`` file.
 
     Returns an empty list if the file does not exist. Raises ``ValueError``
     on malformed entries so the caller can decide to fail-loud.
@@ -54,8 +55,8 @@ def load_suppressions(path: Path | str) -> list[Suppression]:
     if not p.exists():
         return []
 
-    with p.open("r", encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh) or {}
+    with p.open("rb") as fh:
+        raw = tomllib.load(fh) or {}
 
     entries = raw.get("suppressions", [])
     if not isinstance(entries, list):

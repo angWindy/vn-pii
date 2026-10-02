@@ -68,21 +68,22 @@ Runs the content regex set, then applies **combo boost**:
 
 ## Suppressions
 
-A YAML file (`suppressions.yaml` at the repo root is an example) with this
+A TOML file (`suppressions.toml` at the repo root is an example) with this
 shape:
 
-```yaml
-suppressions:
-  - column_pattern: customer_id        # regex, case-insensitive
-    value_prefix: "id_"                # literal string value must start with
-    owner: synth-data-team             # who is responsible
-    expires_at: 2027-12-31             # ISO date — past this date it stops matching
-    reason: Faker seed 42; verified by /tests/test_smoke.py
+```toml
+[[suppressions]]
+column_pattern = "customer_id"        # regex, case-insensitive
+value_prefix = "id_"                 # literal string the value must start with
+owner = "synth-data-team"            # who is responsible
+expires_at = 2027-12-31              # ISO date — past this date it stops matching
+reason = "Faker seed 42; verified by /tests/test_smoke.py"
 ```
 
-`pii_linter.suppressions.load_suppressions(path)` parses the file and
-returns `[]` if it is missing. `is_suppressed(col, value, sups)` returns
-`True` for the first active match.
+`pii_linter.suppressions.load_suppressions(path)` parses the file using
+stdlib `tomllib` and returns `[]` if it is missing. `is_suppressed(col,
+value, sups)` returns `True` for the first active match. Slice 2 moved
+this loader off PyYAML so the tool has zero runtime dependencies.
 
 **Best practice:**
 
