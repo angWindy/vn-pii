@@ -1,0 +1,7 @@
+- id: pa1-lint-staged
+  name: PA1 PII linter (staged files)
+  description: Quét CSV/JSONL/Markdown staged để phát hiện PII trước khi commit
+  entry: pa1-lint scan
+  language: system
+  pass_filenames: true
+  types: [csv, jsonl, markdown]
