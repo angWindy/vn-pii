@@ -177,7 +177,7 @@ pytest tests/                       → 36/36 pass
 ## Slice 2 acceptance tests (all verified ✅)
 
 ```
-pip install git+https://github.com/anthang2003/vn-pii
+pip install git+https://github.com/angWindy/vn-pii
   → zero extra packages pulled
 pa1-lint --version                  → works without conda env
 pa1-lint scan fixtures/gold/leads_50.csv

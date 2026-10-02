@@ -12,7 +12,7 @@ Markdown datasets. Designed to wrap both `git` (pre-commit) and AI-agent
 commands (Cursor, Aider, Claude Code).
 
 > **Status:** Slice 3 (commit-time diff scan). One-command install:
-> `pip install git+https://github.com/anthang2003/vn-pii`. No runtime
+> `pip install git+https://github.com/angWindy/vn-pii`. No runtime
 > dependencies. Python 3.11+ required.
 >
 > See [docs/spec.md](docs/spec.md) for the public API and
@@ -22,7 +22,7 @@ commands (Cursor, Aider, Claude Code).
 ## Quick start — Use in any project
 
 ```bash
-pip install git+https://github.com/anthang2003/vn-pii
+pip install git+https://github.com/angWindy/vn-pii
 pa1-lint scan path/to/your/dataset
 pa1-lint scan path/to/your/dataset --suppressions suppressions.toml
 ```
@@ -33,7 +33,7 @@ because the suppressions loader uses Python 3.11's stdlib `tomllib`.
 ## Quick start — Contributor
 
 ```bash
-git clone https://github.com/anthang2003/vn-pii
+git clone https://github.com/angWindy/vn-pii
 cd vn-pii
 pip install -e .[dev]
 python fixtures/generators/make_synthetic.py --out gold negative

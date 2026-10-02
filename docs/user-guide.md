@@ -13,7 +13,7 @@ Slice 2 made the tool work in any Python 3.11+ environment with a single
 ### End user (your own project)
 
 ```bash
-pip install git+https://github.com/anthang2003/vn-pii
+pip install git+https://github.com/angWindy/vn-pii
 ```
 
 That is it. `pa1-lint` is now on your `PATH`. The tool has zero runtime
@@ -29,7 +29,7 @@ pa1-lint --help
 ### Contributor (this repo)
 
 ```bash
-git clone https://github.com/anthang2003/vn-pii
+git clone https://github.com/angWindy/vn-pii
 cd vn-pii
 pip install -e .[dev]
 ```
@@ -158,8 +158,8 @@ every CSV / JSONL commit scanned:
 
 ```bash
 # 1. One-time setup in Customer-Analytics/
-pip install git+https://github.com/anthang2003/vn-pii
-curl -O https://raw.githubusercontent.com/anthang2003/vn-pii/main/examples/pre-commit-config.yaml
+pip install git+https://github.com/angWindy/vn-pii
+curl -O https://raw.githubusercontent.com/angWindy/vn-pii/main/examples/pre-commit-config.yaml
 mv pre-commit-config.yaml .pre-commit-config.yaml
 pip install pre-commit
 pre-commit install
@@ -201,7 +201,7 @@ Slice 2 bumped the Python floor to 3.11 because `tomllib` is in stdlib
 from 3.11. Use `python3.11`, `python3.12`, `python3.13` or newer:
 
 ```bash
-python3.11 -m pip install git+https://github.com/anthang2003/vn-pii
+python3.11 -m pip install git+https://github.com/angWindy/vn-pii
 ```
 
 ### Pre-commit hook does not run
@@ -247,6 +247,6 @@ output. Raw evidence never reaches stdout, stderr, or your terminal.
 ## Support
 
 - Bug reports / feature requests: open an issue on
-  [github.com/anthang2003/vn-pii](https://github.com/anthang2003/vn-pii).
+  [github.com/angWindy/vn-pii](https://github.com/angWindy/vn-pii).
 - For questions, see [docs/architecture.md](architecture.md) and
   [docs/detectors.md](detectors.md) for internals.
