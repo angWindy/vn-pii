@@ -157,24 +157,54 @@ Most modern coding agents expose a **native hook system** that is a
 better fit than wrapping the whole command: the agent sees a non-zero
 exit and re-prompts itself to redact before continuing.
 
-Drop-in configs are in [`examples/hooks/`](examples/hooks/README.md):
+There are two ways to install the hook configs:
 
-- **Claude Code** — copy `examples/hooks/claude-code.json` to
-  `~/.claude/settings.json` (or `.claude/settings.json` for a project).
-- **Cursor** — copy `examples/hooks/cursor.json` to
-  `~/.cursor/hooks.json`.
-- **Cody (Sourcegraph)** — copy `examples/hooks/cody.json` to
-  `~/.config/sourcegraph/cody.json`.
-- **Codex CLI** — add `notify = ["bash", ".../codex-notify.sh"]` to
-  `~/.codex/config.toml`.
-- **Aider** — Aider has no native hooks; use `examples/hooks/aider.sh`
-  as a wrapper.
+### A) Drop-in files (`examples/hooks/`)
+
+Manual copy. Each file is a complete, ready-to-paste config:
+
+- [`examples/hooks/claude-code.json`](examples/hooks/claude-code.json)
+- [`examples/hooks/cursor.json`](examples/hooks/cursor.json)
+- [`examples/hooks/cody.json`](examples/hooks/cody.json)
+- [`examples/hooks/codex.toml`](examples/hooks/codex.toml)
+- [`examples/hooks/codex-notify.sh`](examples/hooks/codex-notify.sh)
+- [`examples/hooks/aider.sh`](examples/hooks/aider.sh)
+
+See [`examples/hooks/README.md`](examples/hooks/README.md) for the
+install recipe for each agent.
+
+### B) One-line install (`pa1-lint install-hooks`)
+
+The CLI ships a subcommand that copies the bundled templates into the
+correct location for the agent you choose. It deep-merges existing
+JSON files (so a `UserPromptSubmit` you already configured survives) and
+appends to TOML files (also preserving other agents' notify scripts).
+
+```bash
+# User-wide (default — writes under $HOME):
+pa1-lint install-hooks claude-code
+pa1-lint install-hooks all
+
+# Project-wide (writes under current git repo root):
+pa1-lint install-hooks claude-code --project
+pa1-lint install-hooks cursor     --project
+
+# Inspect first, write later:
+pa1-lint install-hooks codex --dry-run
+
+# Replace existing config instead of merging:
+pa1-lint install-hooks cursor --force-replace
+```
+
+The agent list is `claude-code | cursor | cody | codex | aider | all`.
+Aider is special: it drops a `pa1-lint-aider` wrapper next to the
+`pa1-lint` binary (or in `$HOME/.local/bin` if the lookup fails), so you
+can alias `aider-safe='pa1-lint-aider'` or call it directly.
 
 Every hook calls `pa1-lint scan` and bubbles up the exit code:
 `1` (HIGH) and `2` (CRITICAL) block the tool call. The agent then
 re-prompts itself to redact. See
-[`examples/hooks/README.md`](examples/hooks/README.md) for the full
-install recipe and caveats.
+[`examples/hooks/README.md`](examples/hooks/README.md) for caveats.
 
 ## Using pa1-lint in a downstream project
 

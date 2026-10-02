@@ -334,6 +334,28 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     return _exit_for(result.findings)
 
 
+def _cmd_install_hooks(args: argparse.Namespace) -> int:
+    from pii_linter.hooks import install_hooks
+
+    if args.agent == "all":
+        agents = ["claude-code", "cursor", "cody", "codex"]
+    elif args.agent == "aider":
+        agents = ["aider"]
+    else:
+        agents = [args.agent]
+
+    if args.user and args.project:
+        sys.stderr.write("Error: --user and --project are mutually exclusive.\n")
+        return 2
+    scope = "project" if args.project else "user"
+    return install_hooks.install(
+        agents=agents,
+        scope=scope,
+        force_replace=args.force_replace,
+        dry_run=args.dry_run,
+    )
+
+
 def _cmd_guard(args: argparse.Namespace) -> int:
     from pii_linter.guard import run
 
@@ -378,6 +400,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="The shell command and args to execute after pre-scan.",
     )
     p_guard.set_defaults(func=_cmd_guard)
+
+    p_install = sub.add_parser(
+        "install-hooks",
+        help="Install PA1 hook configs into a coding agent's config dir. "
+             "Templates are read from the installed package.",
+    )
+    p_install.add_argument(
+        "agent",
+        choices=("claude-code", "cursor", "cody", "codex", "aider", "all"),
+        help="Which agent's config to install. 'all' covers the 4 JSON/TOML agents.",
+    )
+    p_install.add_argument(
+        "--user",
+        action="store_true",
+        help="Install under $HOME (default).",
+    )
+    p_install.add_argument(
+        "--project",
+        action="store_true",
+        help="Install under the current git repo root (./.claude, ./.cursor, ...).",
+    )
+    p_install.add_argument(
+        "--force-replace",
+        action="store_true",
+        help="Overwrite existing config files instead of merging.",
+    )
+    p_install.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be written without touching any files.",
+    )
+    p_install.set_defaults(func=_cmd_install_hooks)
     return parser
 
 
