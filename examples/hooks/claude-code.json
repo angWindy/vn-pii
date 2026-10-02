@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "PA1 PII linter hook for Claude Code.",
+    "Install: copy this file to ~/.claude/settings.json (user-wide) or",
+    "          .claude/settings.json (per-project) and merge with your existing config.",
+    "Requires: `pa1-lint` on PATH. `pip install git+https://github.com/angWindy/vn-pii`.",
+    "",
+    "Behavior:",
+    "  PostToolUse: after Claude writes/edits a file, scan it. Exit 2 on HIGH+",
+    "               to block the tool result and force Claude to redact.",
+    "  Stop:        at end-of-turn, scan the working tree. Exit 2 to force",
+    "               Claude to continue and clean up before signing off.",
+    "",
+    "Scope matcher (PostToolUse|Write|.*) means every Write/Edit/MultiEdit tool",
+    "call. Adjust if you have other tools named Write/Edit."
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$CLAUDE_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pa1-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pa1-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
