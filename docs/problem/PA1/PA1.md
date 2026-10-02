@@ -5,9 +5,7 @@
 - **Research:** Do column heuristics plus regex beat regex-alone on mentor-labelled columns?
 - **Evaluate:** Precision/recall on planted PII, false alarms on synthetic IDs and time to clean a failing file. Never print full secret values in the report.
 
-### PA1. Bộ lint PII tập dữ liệu (S)
+### See also
 
-- **Tech stack đề xuất:** CLI Python, regex và heuristic theo tên cột, tùy chọn `presidio-analyzer` nếu được duyệt cho workstation; pytest fixture với PII gieo sẵn; exit code cho pre-commit hoặc CI. Chỉ quét các đường dẫn thực tập sinh sở hữu (golden JSONL, CSV mẫu).
-- **MVP:** Đánh dấu khả năng chứa tên, số điện thoại, email, CMND/CCCD và blob văn bản tự do trong một golden dataset dự kiến trước khi commit, kèm file suppressions cho các trường tổng hợp đã biết.
-- **Nghiên cứu:** Heuristic cột cộng regex có thắng regex-đơn-lẻ trên các cột được mentor gắn nhãn không?
-- **Đánh giá:** Precision/recall trên PII gieo sẵn, cảnh báo sai trên ID tổng hợp và thời gian dọn một file đang lỗi. Không bao giờ in nguyên giá trị bí mật trong báo cáo.
+- [side.md](side.md) — full research notes (English)
+- [side.vi.md](side.vi.md) — full research notes (Vietnamese)
