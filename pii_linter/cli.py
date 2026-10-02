@@ -50,7 +50,15 @@ def _env_fail() -> None:
 
 
 def _list_files(root: Path) -> Iterable[Path]:
-    """Yield target files up to depth ``_MAX_DEPTH``."""
+    """Yield target files up to depth ``_MAX_DEPTH``.
+
+    If ``root`` is a single file (e.g. ``pa1-lint scan path/to/x.csv``),
+    yield it directly so callers can scan individual fixtures.
+    """
+    if root.is_file():
+        if root.suffix.lower() in _TARGET_EXTS:
+            yield root
+        return
     base_depth = len(root.parts) - 1
     for p in root.rglob("*"):
         if not p.is_file():
