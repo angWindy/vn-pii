@@ -2,10 +2,11 @@
 
 Usage:
     pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
+    pa1-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
     pa1-lint guard -- <cmd>...
 
-The CLI fail-fasts if it is not running inside the ``pa1`` conda environment
-(exit code 3).
+The tool runs in any Python 3.11+ environment (no conda env check in
+Slice 2+).
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ import argparse
 import csv
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -168,6 +171,106 @@ def scan_path(root: str | Path, suppressions_path: str | Path | None = None) -> 
     return ScanResult(findings=findings, files_scanned=files, by_file=by_file)
 
 
+# ---------------------------------------------------------------------------
+# Staged-diff scan (used by `pa1-lint scan --staged` and the pre-commit hook).
+# ---------------------------------------------------------------------------
+
+def _git_diff_staged(cwd: Path) -> list[tuple[str, int, str]]:
+    """Return added lines from ``git diff --cached`` as ``(file, line_no, text)``.
+
+    Lines starting with ``+++`` are file headers (skipped). Lines starting
+    with ``+`` (excluding ``+++``) are content added in the new revision. The
+    leading ``+`` is stripped; ``dt.line_no`` is taken from the hunk header
+    (``@@ -a,b +c,d @@``).
+
+    Returns ``[]`` if the cwd is not a git repo or git is not on PATH.
+    """
+    if not (cwd / ".git").exists():
+        return []
+    exe = shutil.which("git")
+    if exe is None:
+        return []
+    try:
+        proc = subprocess.run(
+            [exe, "diff", "--cached", "--unified=0", "--no-renames", "--no-color"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+    out: list[tuple[str, int, str]] = []
+    current_file = ""
+    new_line = 0
+    for line in proc.stdout.splitlines():
+        if line.startswith("diff --git"):
+            # diff --git a/path/to/file b/path/to/file
+            try:
+                parts = line.split()
+                current_file = parts[2].lstrip("a/")
+            except IndexError:
+                current_file = ""
+            new_line = 0
+            continue
+        if line.startswith("--- "):
+            continue
+        if line.startswith("+++ "):
+            continue
+        if line.startswith("@@"):
+            # @@ -old_a,old_b +new_a,new_b @@
+            try:
+                plus = line.split("+", 1)[1]
+                num = plus.split(",", 1)[0].split(" ", 1)[0]
+                new_line = int(num)
+            except (IndexError, ValueError):
+                new_line = 0
+            continue
+        if line.startswith("+"):
+            if current_file and new_line:
+                out.append((current_file, new_line, line[1:]))
+            new_line += 1
+    return out
+
+
+def scan_staged(cwd: str | Path | None = None, suppressions_path=None) -> ScanResult:
+    """Scan lines added by ``git diff --cached`` and return findings.
+
+    Only lines whose file extension is in ``_TARGET_EXTS`` are scanned.
+    Each finding carries ``file`` (path) and ``line_no`` so reporters can
+    render a ``file:line`` cursor.
+    """
+    from dataclasses import replace
+
+    root = Path(cwd) if cwd else Path.cwd()
+    sups = (
+        load_suppressions(suppressions_path)
+        if suppressions_path is not None
+        else []
+    )
+    findings: list[Finding] = []
+    by_file: dict[str, list[Finding]] = {}
+    files_scanned = 0
+    for file_path, lineno, text in _git_diff_staged(root):
+        display_path = file_path.removeprefix("a/")
+        ext = Path(display_path).suffix.lower()
+        if ext not in _TARGET_EXTS:
+            continue
+        files_scanned += 1
+        if not text.strip():
+            continue
+        if is_suppressed("", text, sups):
+            continue
+        bucket: list[Finding] = []
+        for f in _dispatch_value(text, []):
+            bucket.append(replace(f, file=display_path, line_no=lineno))
+        if bucket:
+            by_file.setdefault(display_path, []).extend(bucket)
+            findings.extend(bucket)
+    return ScanResult(findings=findings, files_scanned=files_scanned, by_file=by_file)
+
+
 def _exit_for(findings: list[Finding]) -> int:
     if not findings:
         return 0
@@ -180,7 +283,13 @@ def _exit_for(findings: list[Finding]) -> int:
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
-    result = scan_path(args.path, suppressions_path=args.suppressions)
+    if args.staged:
+        result = scan_staged(suppressions_path=args.suppressions)
+    elif args.path is None:
+        sys.stderr.write("Error: PATH is required unless --staged is set.\n")
+        return 2
+    else:
+        result = scan_path(args.path, suppressions_path=args.suppressions)
     if args.format == "json":
         sys.stdout.write(
             json.dumps(
@@ -192,6 +301,8 @@ def _cmd_scan(args: argparse.Namespace) -> int:
                             "severity": f.severity,
                             "evidence_masked": f.evidence_masked,
                             "span": list(f.span) if f.span else None,
+                            "file": f.file or None,
+                            "line_no": f.line_no or None,
                         }
                         for f in result.findings
                     ],
@@ -201,6 +312,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
                                 "entity": f.entity,
                                 "severity": f.severity,
                                 "evidence_masked": f.evidence_masked,
+                                "line_no": f.line_no or None,
                             }
                             for f in fs
                         ]
@@ -230,8 +342,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_scan = sub.add_parser("scan", help="Scan a directory tree for PII.")
-    p_scan.add_argument("path", help="Root directory to scan recursively.")
+    p_scan = sub.add_parser("scan", help="Scan a directory tree or staged diff for PII.")
+    p_scan.add_argument("path", nargs="?", default=None,
+                        help="Root directory to scan recursively. Omit when --staged is set.")
     p_scan.add_argument(
         "--format",
         choices=("markdown", "json"),
@@ -242,6 +355,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--suppressions",
         default=None,
         help="Path to a suppressions.toml file.",
+    )
+    p_scan.add_argument(
+        "--staged",
+        action="store_true",
+        help="Scan only the lines introduced by `git diff --cached` "
+             "(used by the pre-commit hook). Implies no positional PATH.",
     )
     p_scan.set_defaults(func=_cmd_scan)
 

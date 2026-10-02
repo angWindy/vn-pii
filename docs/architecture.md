@@ -47,6 +47,37 @@ flowchart LR
 5. Reporters render `Finding`s grouped by file. Reporters never see
    `evidence_raw`.
 
+## Commit-time data flow (`pa1-lint scan --staged`)
+
+This is the path the pre-commit framework uses. Instead of walking the
+filesystem, the CLI parses `git diff --cached --unified=0 --no-renames`
+and scans the lines introduced by the staged changes.
+
+```mermaid
+flowchart LR
+  A[git diff --cached<br/>--unified=0] --> B[cli.scan_staged]
+  B --> C[per added line:<br/>file + line_no + text]
+  C --> D[content regex]
+  D --> E[Luhn + BIN]
+  D --> F[free-text combo]
+  D --> H[(Finding<br/>file + line_no)]
+  E --> H
+  F --> H
+  B --> I[suppressions.toml<br/>value_prefix only]
+  I -- match --> G((skip))
+  H --> J[report.render_markdown<br/>location = file:line]
+  H --> K[report JSON]
+```
+
+Highlights:
+- The diff has no column header context, so `column_pattern`
+  suppressions do not apply here. `value_prefix` suppressions still
+  work.
+- Each finding carries the cursor `file:line` so the user can jump to
+  the offending line in their editor.
+- Exit code `1` (HIGH) or `2` (CRITICAL) blocks the commit via the
+  pre-commit framework.
+
 ## Guard flow
 
 ```mermaid
@@ -101,11 +132,13 @@ Pinning to 3.11 means `pip install` pulls nothing else. Pinning to the
 exact toolchain in `environment.yml` still gives every contributor the
 same `Faker` + `pytest` versions when regenerating fixtures.
 
-## What is NOT in slice 2
+## What is NOT in slice 3
 
 - Cross-file correlation (e.g. same phone across two files).
 - Presidio integration (only used if precision becomes a problem).
 - SARIF / GitHub Action output.
 - Precision/recall measurement against labeled data.
+- `git add` hook (Git has no `pre-add` stage; use the pre-commit hook at
+  commit time instead).
 
 See [docs/problem/PA1/PA1.md](problem/PA1/PA1.md) for the original scope.

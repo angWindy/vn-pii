@@ -1,11 +1,17 @@
 # PA1 PII Linter
 
+> **🚫 Blocks your commit if HIGH+ PII is staged.**
+> Wires `git diff --cached` into a pre-commit hook that scans only the
+> lines you are about to commit, shows `file:line | masked_evidence`, and
+> blocks the commit on findings.
+> See [docs/user-guide.md §Pre-commit hook](docs/user-guide.md#pre-commit-hook).
+
 A local-only pre-commit scanner that flags Vietnamese PII (SĐT, CCCD, CMND,
 email, card Luhn, VIN/plate, Zalo handle, free-text blobs) in CSV / JSONL /
 Markdown datasets. Designed to wrap both `git` (pre-commit) and AI-agent
 commands (Cursor, Aider, Claude Code).
 
-> **Status:** Slice 2 (zero-dep distribution). One-command install:
+> **Status:** Slice 3 (commit-time diff scan). One-command install:
 > `pip install git+https://github.com/anthang2003/vn-pii`. No runtime
 > dependencies. Python 3.11+ required.
 >

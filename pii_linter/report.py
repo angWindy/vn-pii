@@ -95,10 +95,19 @@ def mask_value(value: str, entity: str) -> str:
 def _row(findings: Iterable[Finding]) -> str:
     rows = []
     for f in findings:
+        if f.file and f.line_no:
+            cursor = f"{f.file}:{f.line_no}"
+        else:
+            cursor = ""
         rows.append(
-            f"| {f.entity} | {f.severity} | `{f.evidence_masked}` |"
+            f"| {cursor or '`—`'} | {f.entity} | {f.severity} | `{f.evidence_masked}` |"
         )
     return "\n".join(rows)
+
+
+def _any_diff_mode(result: ScanResult) -> bool:
+    """True if any finding carries a file/line cursor (i.e. --staged output)."""
+    return any(f.file and f.line_no for f in result.findings)
 
 
 def render_markdown(result: ScanResult) -> str:
@@ -115,12 +124,16 @@ def render_markdown(result: ScanResult) -> str:
         f"- severity_counts: LOW={by_sev[LOW]}, MEDIUM={by_sev[MEDIUM]}, "
         f"HIGH={by_sev[HIGH]}, CRITICAL={by_sev[CRITICAL]}"
     )
+    if _any_diff_mode(result):
+        lines.append("- mode: staged-diff")
     lines.append("")
+    header_extra = " location |" if _any_diff_mode(result) else ""
     for path, findings in result.by_file.items():
         lines.append(f"## {path}")
         lines.append("")
-        lines.append("| entity | severity | evidence_masked |")
-        lines.append("|---|---|---|")
+        lines.append(f"|{header_extra} entity | severity | evidence_masked |")
+        sep = "---|" + ("---|" if header_extra else "")
+        lines.append(f"|{sep}---|---|---|")
         lines.append(_row(findings))
         lines.append("")
         max_sev = max(f.severity for f in findings) if findings else LOW

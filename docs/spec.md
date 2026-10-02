@@ -97,6 +97,19 @@ and is the single source of truth.
   - `1` — at least one HIGH finding
   - `2` — at least one CRITICAL finding
 
+#### `pa1-lint scan --staged [--suppressions PATH]`
+
+- Does **not** take a positional `PATH`.
+- Runs `git diff --cached --unified=0 --no-renames` and scans only the
+  lines introduced by the staged changes.
+- Output uses a `file:line | entity | severity | evidence_masked` table so
+  the user can jump straight to the offending line.
+- Outside a git repo: prints a warning and exits `0` (no findings).
+- Same exit codes as the full-scan mode: `0` / `1` / `2`.
+- Suppressions by column pattern do not apply here (the diff has no
+  column header context). Suppressions by `value_prefix` still work.
+- The pre-commit hook in `.pre-commit-hooks.yaml` calls this subcommand.
+
 ### `pa1-lint guard -- <cmd> [<args>...]`
 
 - Reads `git diff HEAD` and scans added lines.

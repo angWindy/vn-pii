@@ -76,8 +76,8 @@ pa1-lint scan path/to/dataset --suppressions suppressions.toml
 
 ## Pre-commit hook
 
-1. Copy `examples/pre-commit-config.yaml` into your repo as
-   `.pre-commit-config.yaml`.
+1. Copy [`examples/pre-commit-config.yaml`](examples/pre-commit-config.yaml)
+   into your repo as `.pre-commit-config.yaml`.
 2. Make sure `pa1-lint` is installed in the active Python env
    (`pa1-lint --version` should work).
 3. Install pre-commit:
@@ -88,8 +88,40 @@ pa1-lint scan path/to/dataset --suppressions suppressions.toml
    ```
 
 From now on, every `git commit` that touches `.csv` / `.jsonl` /
-`.markdown` files runs `pa1-lint scan` on the staged content. The commit
-is blocked if HIGH or CRITICAL findings appear.
+`.markdown` files runs `pa1-lint scan --staged` on the staged content.
+**Only the lines added by your commit are scanned** — pre-existing PII
+in lines you did not touch is ignored. The commit is blocked if HIGH or
+CRITICAL findings appear.
+
+If you want to scan everything (not just staged files), call
+`pa1-lint scan <path>` directly.
+
+### What a blocked commit looks like
+
+```text
+$ git add leads.csv
+$ git commit -m "Add new leads"
+PA1 PII linter (staged diff)............................Failed
+- hook id: pa1-lint-staged
+- exit code: 1
+
+# PA1 PII scan report
+
+- files_scanned: 1
+- total_findings: 1
+- severity_counts: LOW=0, MEDIUM=0, HIGH=1, CRITICAL=0
+- mode: staged-diff
+
+## leads.csv
+
+| location | entity | severity | evidence_masked |
+|---|---|---|---|
+| leads.csv:51 | PHONE | 3 | `planted,***,foo@bar.com` |
+
+> **Suggestions:** Replace with dummy_<n> or redact to ***.
+```
+
+Fix the line, re-stage (`git add leads.csv`), and commit again.
 
 If you want to scan everything (not just staged files), call
 `pa1-lint scan <path>` directly.
@@ -174,14 +206,33 @@ python3.11 -m pip install git+https://github.com/anthang2003/vn-pii
 
 ### Pre-commit hook does not run
 
-Make sure `core.hooksPath` is empty (or `.git/hooks`):
+Run `pre-commit run --all-files` and check the output. The most common
+causes are:
+
+1. `pa1-lint` is not on `PATH` of the env pre-commit uses. The hook is
+   declared with `language: system`, which means pre-commit calls the
+   literal `pa1-lint` from `PATH`. If you used a virtualenv, run
+   `pre-commit install` from inside that env so the hook can find the
+   binary.
+2. The file you are staging is not in `types_or: [csv, jsonl, markdown]`.
+   pre-commit filters out other extensions; rename or move the file.
+3. `core.hooksPath` is set to a non-empty value (e.g. `.husky`). The
+   pre-commit framework then does not get to install its own hook.
+   ```bash
+   git config --get core.hooksPath    # should be empty / unset
+   ```
+
+To re-run the hook without committing:
 
 ```bash
-git config --get core.hooksPath    # should be empty / unset
+pre-commit run pa1-lint-staged --hook-stage pre-commit
 ```
 
-If you set `core.hooksPath` to a custom directory, the pre-commit
-framework will look there instead.
+### Why is the staged report different from the full report?
+
+`pa1-lint scan --staged` only scans the lines introduced by your commit.
+`pa1-lint scan path/to/dataset` reads the whole file from disk. Same
+detectors, same exit codes — only the input scope differs.
 
 ### False positive on `customer_id` containing `id_001`
 
