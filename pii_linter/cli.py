@@ -152,9 +152,10 @@ def scan_path(root: str | Path, suppressions_path: str | Path | None = None) -> 
     files = 0
     for p in sorted(_list_files(root)):
         files += 1
-        rel = str(p.relative_to(root)
-                  if root in p.parents or p == root
-                  else p)
+        if root.is_file():
+            rel = p.name
+        else:
+            rel = str(p.relative_to(root)) if root in p.parents else str(p)
         bucket: list[Finding] = []
         try:
             if p.suffix.lower() == ".csv":
