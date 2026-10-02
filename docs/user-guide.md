@@ -151,6 +151,31 @@ This is meant to be wired into your shell alias:
 alias aider-safe="pa1-lint guard -- aider"
 ```
 
+## Coding-agent hooks (Claude Code, Cursor, Cody, Codex, ...)
+
+Most modern coding agents expose a **native hook system** that is a
+better fit than wrapping the whole command: the agent sees a non-zero
+exit and re-prompts itself to redact before continuing.
+
+Drop-in configs are in [`examples/hooks/`](examples/hooks/README.md):
+
+- **Claude Code** — copy `examples/hooks/claude-code.json` to
+  `~/.claude/settings.json` (or `.claude/settings.json` for a project).
+- **Cursor** — copy `examples/hooks/cursor.json` to
+  `~/.cursor/hooks.json`.
+- **Cody (Sourcegraph)** — copy `examples/hooks/cody.json` to
+  `~/.config/sourcegraph/cody.json`.
+- **Codex CLI** — add `notify = ["bash", ".../codex-notify.sh"]` to
+  `~/.codex/config.toml`.
+- **Aider** — Aider has no native hooks; use `examples/hooks/aider.sh`
+  as a wrapper.
+
+Every hook calls `pa1-lint scan` and bubbles up the exit code:
+`1` (HIGH) and `2` (CRITICAL) block the tool call. The agent then
+re-prompts itself to redact. See
+[`examples/hooks/README.md`](examples/hooks/README.md) for the full
+install recipe and caveats.
+
 ## Using pa1-lint in a downstream project
 
 Imagine you work on `Customer-Analytics` (your own repo) and you want
