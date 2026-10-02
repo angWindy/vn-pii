@@ -16,7 +16,7 @@ from pathlib import Path
 from pii_linter import Finding, ScanResult
 from pii_linter.detectors.column_name import score_column
 from pii_linter.detectors.content_regex import scan_value as scan_content_fn
-from pii_linter.detectors.free_text import scan as scan_free_text_fn
+from pii_linter.detectors.free_text import apply_combo as apply_combo_fn
 from pii_linter.detectors.luhn_card import detect_card
 from pii_linter.report import render_markdown
 from pii_linter.severity import HIGH
@@ -60,8 +60,7 @@ def _scan_diff_text(text: str) -> list[Finding]:
         if card is not None:
             findings.append(card)
         findings.extend(scan_content_fn(line, []))
-        findings.extend(scan_free_text_fn(line, []))
-    return findings
+    return apply_combo_fn(findings)
 
 
 def _fake_result(findings: list[Finding]) -> ScanResult:

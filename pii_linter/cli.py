@@ -24,7 +24,7 @@ from typing import Iterable
 from pii_linter import Finding, ScanResult
 from pii_linter.detectors.column_name import score_column
 from pii_linter.detectors.content_regex import scan_value as scan_content
-from pii_linter.detectors.free_text import scan as scan_free_text
+from pii_linter.detectors.free_text import apply_combo
 from pii_linter.detectors.luhn_card import detect_card
 from pii_linter.report import render_markdown
 from pii_linter.severity import CRITICAL, HIGH
@@ -65,14 +65,18 @@ def _dispatch_value(
     value: str,
     hints,
 ) -> list[Finding]:
-    """Run all detectors on a single value and return 0+ Finding."""
+    """Run all detectors on a single value and return 0+ Finding.
+
+    Content regex runs once; combo boost is applied to the merged list
+    (no double-scan). The NOTE-column / long-value gating is the caller's
+    responsibility (it already knows whether ``hints`` contains NOTE).
+    """
     findings: list[Finding] = []
     card = detect_card(value)
     if card is not None:
         findings.append(card)
     findings.extend(scan_content(value, hints))
-    findings.extend(scan_free_text(value, hints))
-    return findings
+    return apply_combo(findings)
 
 
 def _scan_csv(
