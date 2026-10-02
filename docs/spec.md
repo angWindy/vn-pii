@@ -10,7 +10,7 @@ is implementation detail and may change.
 - **License:** MIT (see `pyproject.toml`)
 - **Python:** `>= 3.11` (stdlib `tomllib` is required for `suppressions.toml`)
 - **Runtime dependencies:** `[]` (zero)
-- **Install:** `pip install git+https://github.com/anthang2003/vn-pii`
+- **Install:** `pip install git+https://github.com/angWindy/vn-pii`
 
 ## Public dataclasses (in `pii_linter`)
 

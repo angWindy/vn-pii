@@ -27,9 +27,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/anthang2003/vn-pii"
-Repository = "https://github.com/anthang2003/vn-pii"
-Issues = "https://github.com/anthang2003/vn-pii/issues"
+Homepage = "https://github.com/angWindy/vn-pii"
+Repository = "https://github.com/angWindy/vn-pii"
+Issues = "https://github.com/angWindy/vn-pii/issues"
 
 [project.optional-dependencies]
 dev = [
