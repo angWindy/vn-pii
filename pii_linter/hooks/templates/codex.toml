@@ -1,9 +1,10 @@
 # PA1 PII linter hook for OpenAI Codex CLI.
 #
 # Install:
-#   1. Edit ~/.codex/config.toml (create if absent).
-#   2. Add the lines below under [project] or at the top level.
-#   3. Make sure `pa1-lint` is on PATH.
+#   1. Run `pa1-lint install-hooks codex`. It drops this notify script
+#      under ~/.codex/hooks/codex-notify.sh and patches __PA1_NOTIFY_PATH__
+#      below to its absolute path.
+#   2. Make sure `pa1-lint` is on PATH.
 #
 # Behavior:
 #   notify runs every time Codex finishes a turn (success or fail).
