@@ -45,6 +45,7 @@ pa1-lint = "pii_linter.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pii_linter"]
+include = ["pii_linter/hooks/templates/*.json", "pii_linter/hooks/templates/*.toml", "pii_linter/hooks/templates/*.sh"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
