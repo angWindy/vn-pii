@@ -2,14 +2,14 @@
 
 ## Context
 
-- **Session:** Verify Slice 1 hoàn thành + fix bug phát hiện trong quá trình verify.
-- **Trigger:** User hỏi "Tiếp theo nên làm gì" → kiểm tra plan v3 → phát hiện 4 acceptance test trong plan §Tiêu chí hoàn thành có 1 test (`pa1-lint scan fixtures/gold/leads_50.csv`) đang fail với `exit 0, files_scanned: 0`.
+- **Session:** Verify Slice 1 completion and fix a bug discovered during verification.
+- **Trigger:** User said "what to do next" → reviewed plan v3 → found that one of the four acceptance tests in §Completion criteria (`pa1-lint scan fixtures/gold/leads_50.csv`) was failing with `exit 0, files_scanned: 0`.
 
-## Đã làm
+## What was done
 
-- **Verify**: chạy `pa1-lint scan fixtures/gold/leads_50.csv` → exit 0, 0 findings (kỳ vọng: exit 1, ≥1 PHONE).
-- **Root cause**: `_list_files(root)` ở `pii_linter/cli.py:55–63` gọi `root.rglob('*')`; khi `root` là file (không phải directory), `rglob` trả về 0 mục → CLI thấy không có file để scan.
-- **Patch**: Thêm 4 dòng early-return khi `root.is_file()` (chỉ yield nếu suffix nằm trong `{csv,jsonl,md}`). Logic `rglob` cho directory giữ nguyên.
+- **Verify**: ran `pa1-lint scan fixtures/gold/leads_50.csv` → exit 0, zero findings (expected: exit 1, at least one PHONE).
+- **Root cause**: `_list_files(root)` in `pii_linter/cli.py:55–63` called `root.rglob('*')`; when `root` is a file (not a directory), `rglob` returns zero items, so the CLI sees nothing to scan.
+- **Patch**: added four lines of early-return when `root.is_file()` (only yield if the suffix is in `{csv,jsonl,md}`). The `rglob` logic for directories is unchanged.
 
 ```python
 # pii_linter/cli.py — _list_files()
@@ -21,30 +21,30 @@ base_depth = len(root.parts) - 1
 ...
 ```
 
-- **Bonus discovery**: 5 docs file (`docs/architecture.md`, `contributing.md`, `detectors.md`, `spec.md`, `user-guide.md`) đều **đã có** từ trước → plan v3 §10 thực ra đã hoàn thành. Chỉ thiếu layer navigation (PLAN/Worklog/Index).
-- **Tạo layer navigation**: `PLAN.md`, `Worklog/INDEX.md`, file này, `Index.md` (root).
+- **Bonus discovery**: the five docs files (`docs/architecture.md`, `contributing.md`, `detectors.md`, `spec.md`, `user-guide.md`) already existed from earlier → §10 of plan v3 was effectively complete. Only the navigation layer (PLAN/Worklog/Index) was missing.
+- **Created the navigation layer**: `PLAN.md`, `Worklog/INDEX.md`, this file, `Index.md` (at root).
 
 ## Findings / decisions
 
-- **`rglob` không yield self**: Python `Path.rglob('*')` trên file path rỗng — đây là hành vi well-documented nhưng dễ bị miss. Cần test edge case này.
-- **Plan v3 status `pending` không phản ánh thực tế**: 17 todo trong plan đa số đã xong từ session trước, chỉ thiếu navigation. → Không nên skip verification; luôn `ls` trước.
-- **Bug xuất hiện ở CLI layer, không phải detector**: detector đã đúng (JSONL scan ra 364 findings), chỉ CLI không enumerate được file đơn. → Đó là lý do chỉ fix `_list_files`, không cần động vào `detectors/`.
+- **`rglob` does not yield the root file**: Python's `Path.rglob('*')` on a file path is empty — this is a well-documented behaviour but easy to miss. We should add an edge-case test.
+- **Plan v3 `pending` status did not reflect reality**: most of the 17 todos were already done in earlier sessions; only the navigation layer was missing. Do not trust plan status blindly; always `ls` first.
+- **Bug is in the CLI layer, not the detector layer**: detectors were correct (the JSONL scan produced 364 findings); only the CLI failed to enumerate a single file. That is why only `_list_files` was patched; `detectors/` was left untouched.
 
 ## Acceptance
 
 - [x] `pa1-lint scan fixtures/gold/leads_50.csv` → exit 1, 100 findings (50 PHONE + 50 EMAIL)
 - [x] `pa1-lint scan fixtures/gold/notes_50.jsonl` → exit 2, 364 findings (CRITICAL)
-- [x] `pa1-lint scan fixtures/negative/aggregate_50.csv` → exit 0, 0 findings
-- [x] `pa1-lint scan fixtures/gold/` (directory) → vẫn chạy `rglob` như cũ
+- [x] `pa1-lint scan fixtures/negative/aggregate_50.csv` → exit 0, zero findings
+- [x] `pa1-lint scan fixtures/gold/` (directory) → still runs `rglob` as before
 - [x] `pytest tests/test_smoke.py -v` → 4 passed
-- [x] Plan v3 §Tiêu chí hoàn thành 7/7 pass
+- [x] Plan v3 §Completion criteria: 7/7 pass
 
 ## Outstanding
 
-- Không — slice 1 đã hoàn thành. Out-of-scope vẫn đúng (cross-file, Presidio, SARIF, PyPI).
+- None — Slice 1 is complete. The out-of-scope items remain (cross-file, Presidio, SARIF, PyPI).
 
-## Liên kết
+## Links
 
-- [`PLAN.md`](../../PLAN.md) §Tiêu chí hoàn thành
+- [`PLAN.md`](../../PLAN.md) §Completion criteria
 - [`docs/architecture.md`](../../docs/architecture.md) §Layered design
-- File đã patch: `pii_linter/cli.py` `_list_files()` (line 55–63)
+- Patched file: `pii_linter/cli.py` `_list_files()` (line 55–63)

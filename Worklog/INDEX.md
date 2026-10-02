@@ -1,51 +1,51 @@
 # Worklog Index
 
-> **Mỗi session làm việc trên repo đều tạo 1 file `Worklog/YYYY-MM-DD_<topic>.md`**
-> và append 1 dòng vào bảng dưới đây.
+> **Every working session on this repo creates one file `Worklog/YYYY-MM-DD_<topic>.md`**
+> and appends one row to the catalog below.
 >
-> Mục đích: agent session sau đọc lại biết **đã fix gì, vì sao, còn nợ gì**.
+> Purpose: the next agent session reads this catalog to learn **what was fixed, why, and what is still outstanding**.
 
-## Cách viết 1 entry worklog (template)
+## Entry template
 
 ```markdown
-# YYYY-MM-DD — <topic ngắn, ≤6 từ>
+# YYYY-MM-DD — <short topic, ≤6 words>
 
 ## Context
-- Session: <mục tiêu ban đầu>
-- Tại sao: <trigger — bug report / plan todo / user request>
+- Session: <initial objective>
+- Why: <trigger — bug report / plan todo / user request>
 
-## Đã làm
-- **commit/file**: mô tảngắn
-- **commit/file**: mô tảngắn
+## What was done
+- **commit/file**: short description
+- **commit/file**: short description
 
 ## Findings / decisions
-- Phát hiện X → quyết định Y vì Z.
+- Found X → decided Y because Z.
 
 ## Acceptance
-- [x] N`pa1-lint scan fixtures/gold/leads_50.csv` → exit 1
-- [x] N`pytest tests/ -v` → N test pass
+- [x] `pa1-lint scan fixtures/gold/leads_50.csv` → exit 1
+- [x] `pytest tests/ -v` → N tests pass
 
 ## Outstanding
-- Bug #2 chưa fix.
-- Cần user quyết định approach v2 (scalar 1 / scalar 2).
+- Bug #2 not yet fixed.
+- Need user decision on approach v2 (option 1 / option 2).
 
-## Liên kết
-- PLAN.md §Tiêu chí hoàn thành
+## Links
+- PLAN.md §Completion criteria
 - docs/architecture.md §X
 - PR #N / commit <hash>
 ```
 
-## Cách dùng Worklog
+## How to use the Worklog
 
-| Agent cần | Đọc |
+| Agent needs | Read |
 |---|---|
-| Biết session gần nhất sửa gì | Entry mới nhất ở bảng dưới |
-| Tìm bug đã fix để khỏi tái khám | `grep -ri "fix" tags/title/ Worklog/` |
-| Biết còn outstanding gì | Filter bảng dưới — cột status |
-| Tạo entry mới | Copy template trên, lưu `YYYY-MM-DD_<topic>.md`, append 1 dòng vào bảng dưới |
+| See what the latest session changed | The newest entry in the catalog below |
+| Find a previously fixed bug (avoid re-investigating) | `grep -ri "fix" tags/title/ Worklog/` |
+| See what is still outstanding | Filter the catalog — `Status` column |
+| Create a new entry | Copy the template above, save as `YYYY-MM-DD_<topic>.md`, append one row to the catalog below |
 
 ## Catalog
 
-| Ngày | Topic | Trạng thái | File |
+| Date | Topic | Status | File |
 |---|---|---|---|
-| 2026-10-02 | Fix `_list_files` không xử lý single-file path | ✅ done | [`2026-10-02_bugfix-scan-single-file.md`](2026-10-02_bugfix-scan-single-file.md) |
+| 2026-10-02 | Fix `_list_files` to handle single-file paths | ✅ done | [`2026-10-02_bugfix-scan-single-file.md`](2026-10-02_bugfix-scan-single-file.md) |
