@@ -1,0 +1,11 @@
+# Example: copy this file into your repo as `.pre-commit-config.yaml`.
+# Requires that `pa1-lint` is installed in the active Python env.
+repos:
+  - repo: local
+    hooks:
+      - id: pa1-lint-staged
+        name: PA1 PII linter (staged files)
+        entry: pa1-lint scan
+        language: system
+        pass_filenames: true
+        types: [csv, jsonl, markdown]
