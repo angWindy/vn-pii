@@ -50,6 +50,12 @@ def test_negative_crm_pipeline_is_clean() -> None:
     assert result.findings == []
 
 
+def test_single_file_path_uses_filename_as_key() -> None:
+    """`scan_path(file.csv)` must key `by_file` by the filename, not '.'."""
+    result = scan_path(FIX_ROOT / "gold" / "leads_50.csv")
+    assert list(result.by_file.keys()) == ["leads_50.csv"]
+
+
 # ---------------------------------------------------------------------------
 # Staged-diff scan (Slice 3: pre-commit hook).
 # ---------------------------------------------------------------------------
