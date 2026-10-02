@@ -8,7 +8,9 @@ is implementation detail and may change.
 - **Name:** `pa1-pii-linter`
 - **Version:** `0.1.0` (see `pii_linter.__version__`)
 - **License:** MIT (see `pyproject.toml`)
-- **Python:** `>= 3.10`
+- **Python:** `>= 3.11` (stdlib `tomllib` is required for `suppressions.toml`)
+- **Runtime dependencies:** `[]` (zero)
+- **Install:** `pip install git+https://github.com/anthang2003/vn-pii`
 
 ## Public dataclasses (in `pii_linter`)
 
@@ -88,7 +90,7 @@ and is the single source of truth.
 ### `pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]`
 
 - Recursively walks `<path>` for `.csv`, `.jsonl`, `.md` up to depth 3.
-- Loads `suppressions.yaml` from `--suppressions PATH` (default: none).
+- Loads `suppressions.toml` from `--suppressions PATH` (default: none).
 - Prints Markdown (default) or JSON to stdout.
 - Exit code:
   - `0` — no HIGH+ findings
@@ -112,17 +114,48 @@ and is the single source of truth.
 | 0 | Clean / success |
 | 1 | HIGH finding(s) blocked |
 | 2 | CRITICAL finding(s) blocked / guard refused |
-| 3 | Not running in conda env `pa1` |
+
+## Suppressions file format (`suppressions.toml`)
+
+Slice 2 moved suppressions from `suppressions.yaml` (PyYAML) to
+`suppressions.toml` (stdlib `tomllib`) so the tool has zero runtime
+dependencies. The schema is TOML `[[suppressions]]` array-of-tables:
+
+```toml
+[[suppressions]]
+column_pattern = "customer_id"   # regex (case-insensitive) matched against column header
+value_prefix = "id_"            # literal string; the value must start with this
+owner = "synth-data-team"       # who is responsible
+expires_at = 2027-12-31         # ISO date; past this date the entry stops matching
+reason = "Faker seed 42"        # free-text justification
+```
+
+Multiple `[[suppressions]]` blocks are allowed. Each block produces one
+`Suppression` dataclass. The file is optional — if it does not exist,
+no suppression is applied.
+
+### Type mapping
+
+| TOML type  | Field          | Notes |
+|------------|----------------|-------|
+| string     | `column_pattern` | regex syntax (`re.search`, `re.IGNORECASE`) |
+| string     | `value_prefix`   | literal prefix (case-sensitive) |
+| string     | `owner`          | informational |
+| date       | `expires_at`     | `YYYY-MM-DD` literal; parser is `date.fromisoformat` |
+| string     | `reason`         | optional; default empty |
 
 ## Compatibility
 
-- The dep list is in `pyproject.toml`. `pyyaml>=6.0` is required at
-  install time. `Faker` and `pandas` are dev-only.
-- Python `3.10` is the floor; tests are written against `3.11`.
+- The runtime dep list is empty (`pyproject.toml: dependencies = []`).
+  `tomllib` is part of Python 3.11+ stdlib. `Faker` and `pytest` are
+  dev-only.
+- Tests run on Python 3.11+ (the floor is enforced by the package
+  metadata and by the `tomllib` import in `pii_linter/suppressions.py`).
 
-## Out of scope (slice 1)
+## Out of scope (slice 2)
 
 - Publishing to PyPI / conda-forge.
+- Pre-built wheels / GitHub Action.
 - Cross-file correlation.
 - Presidio integration.
 - SARIF / GitHub Action.

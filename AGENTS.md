@@ -5,21 +5,24 @@
 >
 > Pair this with [`CLAUDE.md`](CLAUDE.md) for project context.
 
-## 1. Always work inside the `pa1` conda environment
+## 1. Slice 2 dropped the conda-env enforcement
 
-The scanner refuses to run unless `pa1` is in `sys.prefix` (see
-`pii_linter/cli._in_pa1_env`). Before running `pa1-lint`, `pytest`, or
-any script in `fixtures/generators/`:
+`pa1-lint` runs in any Python 3.11+ environment — no conda env check, no
+`exit 3` for a "wrong" environment. This is intentional so end users can
+adopt the tool with a single `pip install` (see [PLAN.md §Slice 2](PLAN.md)).
+
+For this repo's local development, the maintainer still uses the `pa1`
+conda env because it isolates `Faker` (a heavy fixture-only dep) from
+the system Python. **That is a maintainer convenience, not a tool
+requirement.** Other contributors can use any virtualenv that has
+`pip install -e .[dev]`.
+
+If you want the dev env:
 
 ```bash
+# Optional — only needed to regenerate synthetic fixtures or run tests
+conda env create -f environment.yml
 conda activate pa1
-```
-
-If you cannot activate conda (e.g. shell wrapper cannot source
-`~/miniconda3/etc/profile.d/conda.sh`), run commands via:
-
-```bash
-~/miniconda3/envs/pa1/bin/python -m pa1_linter.cli scan ...
 ```
 
 ## 2. Wrap PII-risk edits with `pa1-lint guard`

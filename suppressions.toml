@@ -1,0 +1,27 @@
+# Suppressions for the synthetic gold fixtures in this repo.
+# End users should keep this file next to their dataset; the format is
+# stable and described in docs/spec.md.
+#
+# Slice 2 switched from suppressions.yaml (PyYAML) to suppressions.toml
+# (stdlib tomllib) so the tool has zero runtime dependencies.
+
+[[suppressions]]
+column_pattern = "customer_id"
+value_prefix = "id_"
+owner = "synth-data-team"
+expires_at = 2027-12-31
+reason = "Faker seed 42; verified by tests/test_smoke.py"
+
+[[suppressions]]
+column_pattern = "phone|email"
+value_prefix = "dummy"
+owner = "synth-data-team"
+expires_at = 2027-12-31
+reason = "Faker seed 42; values look real but are dummy."
+
+[[suppressions]]
+column_pattern = "account_no"
+value_prefix = "0"
+owner = "synth-data-team"
+expires_at = 2027-12-31
+reason = "0-padded accounts are seed values."

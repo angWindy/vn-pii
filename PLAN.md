@@ -46,7 +46,7 @@ vn-pii/
 ├── pyproject.toml            ← package metadata + entry point `pa1-lint`
 ├── environment.yml           ← conda env `pa1`, Python 3.11
 ├── .pre-commit-hooks.yaml    ← hook definition consumed by other repos
-├── suppressions.yaml         ← example suppressions file
+├── suppressions.toml         ← example suppressions file (Slice 2; zero runtime dep)
 ├── pii_linter/               ← main package
 ├── tests/                    ← pytest suite
 ├── fixtures/{gold,negative}/ ← synthetic data (gold is git-ignored)

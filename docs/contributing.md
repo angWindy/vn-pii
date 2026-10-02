@@ -23,7 +23,17 @@ This guide assumes you have already followed the contributor steps in
 5. Update `docs/detectors.md` and `docs/spec.md` if the entity appears in
    the public surface.
 
-## Add a new detector
+## Add a new suppression field
+
+Slice 2 uses `suppressions.toml` (stdlib `tomllib`) instead of YAML.
+To extend the schema:
+
+1. Add the field to the `Suppression` dataclass in
+   `pii_linter/suppressions.py`.
+2. Parse it in `_parse_entry`.
+3. Update `matches()` if the field changes matching behavior.
+4. Add a positive + negative test in `tests/test_suppressions.py`.
+5. Document the new field in `docs/spec.md` §Suppressions file format.
 
 A detector is a pure function with the signature:
 
@@ -63,7 +73,7 @@ pytest tests/ -v
 If you want to see the markdown output for a single gold file:
 
 ```bash
-pa1-lint scan fixtures/gold --suppressions suppressions.yaml
+pa1-lint scan fixtures/gold --suppressions suppressions.toml
 ```
 
 ## Commit checklist

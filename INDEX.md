@@ -50,7 +50,7 @@ flowchart TD
 | Code entry point | `pii_linter/cli.py` |
 | Add a detector | `pii_linter/detectors/<name>.py` + update `severity.py` |
 | Severity table | `pii_linter/severity.py` `SEVERITY_BY_ENTITY` |
-| Suppressions format | `suppressions.yaml` + `pii_linter/suppressions.py` |
+| Suppressions format | `suppressions.toml` + `pii_linter/suppressions.py` (TOML via stdlib tomllib) |
 | Tests | `tests/test_*.py` |
 
 ## Reading rules (for a new agent)
@@ -67,7 +67,7 @@ flowchart TD
 | Before you change | You must |
 |---|---|
 | Edit a `.csv` / `.jsonl` / `.md` outside `fixtures/negative/` | Wrap with `pa1-lint guard -- <edit-cmd>` |
-| Run `pa1-lint` / `pytest` / any `fixtures/generators/` script | `conda activate pa1` first |
+| Run `pa1-lint` / `pytest` / any `fixtures/generators/` script | No env required — tool runs in any Python 3.11+ |
 | Stage a file inside `fixtures/gold/` | `git restore --staged <file>` |
 | Add a new detector / entity | Add a key to `SEVERITY_BY_ENTITY` and a test in `tests/test_<name>.py` |
 | Add a dependency to `pyproject.toml` | Ask the user first |
