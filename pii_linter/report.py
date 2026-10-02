@@ -52,8 +52,10 @@ def _mask_email(raw: str) -> str:
     if len(local) <= 2:
         masked_local = "***"
     else:
-        # 1 letter on, 1 off to keep shape.
-        masked_local = ".".join(local[::2])[:1] + "." + ".".join(local[1::2])[:1]
+        # 1 letter on, 1 off to keep shape: "nguyen" -> "n.g.u.y.e.n".
+        on  = "".join(local[i] for i in range(0, len(local), 2))
+        off = "".join(local[i] for i in range(1, len(local), 2))
+        masked_local = ".".join(on) + "." + ".".join(off)
     return f"{masked_local}@{domain}"
 
 
