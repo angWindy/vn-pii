@@ -157,23 +157,9 @@ Most modern coding agents expose a **native hook system** that is a
 better fit than wrapping the whole command: the agent sees a non-zero
 exit and re-prompts itself to redact before continuing.
 
-There are two ways to install the hook configs:
+There is one way to install the hook configs:
 
-### A) Drop-in files (`examples/hooks/`)
-
-Manual copy. Each file is a complete, ready-to-paste config:
-
-- [`examples/hooks/claude-code.json`](examples/hooks/claude-code.json)
-- [`examples/hooks/cursor.json`](examples/hooks/cursor.json)
-- [`examples/hooks/cody.json`](examples/hooks/cody.json)
-- [`examples/hooks/codex.toml`](examples/hooks/codex.toml)
-- [`examples/hooks/codex-notify.sh`](examples/hooks/codex-notify.sh)
-- [`examples/hooks/aider.sh`](examples/hooks/aider.sh)
-
-See [`examples/hooks/README.md`](examples/hooks/README.md) for the
-install recipe for each agent.
-
-### B) One-line install (`pa1-lint install-hooks`)
+### `pa1-lint install-hooks`
 
 The CLI ships a subcommand that copies the bundled templates into the
 correct location for the agent you choose. It deep-merges existing
@@ -203,8 +189,7 @@ can alias `aider-safe='pa1-lint-aider'` or call it directly.
 
 Every hook calls `pa1-lint scan` and bubbles up the exit code:
 `1` (HIGH) and `2` (CRITICAL) block the tool call. The agent then
-re-prompts itself to redact. See
-[`examples/hooks/README.md`](examples/hooks/README.md) for caveats.
+re-prompts itself to redact.
 
 ## Using pa1-lint in a downstream project
 
