@@ -20,6 +20,11 @@ class Finding:
     deterministic human-readable mask (see :func:`pii_linter.report.mask_value`).
     Raw values are NEVER printed by reporters — they only live in memory for
     downstream tooling.
+
+    ``file`` and ``line_no`` carry the diff-cursor path and line number for
+    findings produced by ``pa1-lint scan --staged``. They are empty/zero for
+    findings produced by the full-scan path, so the field is optional and
+    backwards compatible.
     """
 
     entity: str          # one of SEVERITY_BY_ENTITY keys
@@ -27,6 +32,8 @@ class Finding:
     evidence_raw: str    # the slice of `value` that matched (or full value if not span-aware)
     evidence_masked: str # display-safe version
     span: tuple[int, int] | None  # (start, end) into the value, None when not applicable
+    file: str = ""       # repo-relative path; non-empty only for diff-mode findings
+    line_no: int = 0     # line number in the file; non-zero only for diff-mode findings
 
 
 @dataclass(frozen=True)

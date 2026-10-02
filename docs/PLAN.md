@@ -11,6 +11,7 @@ from all slices. For the current status, see [PLAN.md](../PLAN.md).
 |---|---|---|
 | Slice 1 | MVP: detectors + scanner + guard + suppressions + 5 docs + ECC | ✅ Done |
 | Slice 2 | Zero-dep distribution: TOML suppressions, drop PyYAML, drop env enforcement, `pip install git+...` | ✅ Done |
+| Slice 3 | Commit-time diff scan: `--staged` flag, `file:line` locations, pre-commit hook rewired | ✅ Done |
 
 ---
 
@@ -185,6 +186,26 @@ pa1-lint scan fixtures/gold/leads_50.csv \
   --suppressions suppressions.toml
   → loads TOML correctly (3 entries)
 pytest tests/                       → 36/36 pass
+```
+
+## Slice 3 acceptance tests (all verified ✅)
+
+```
+# Inside a temp git repo with a planted phone line:
+pa1-lint scan --staged
+  → exit 1
+  → report has "leads.csv:51 | PHONE | 3 | `***`"
+  → mode: staged-diff
+
+# Inside a temp git repo with only the clean fixture:
+pa1-lint scan --staged
+  → exit 0, 0 findings
+
+# pre-commit framework integration:
+pre-commit run pa1-lint-staged
+  → exit 0 (clean) / exit 1 (HIGH) / exit 2 (CRITICAL)
+
+pytest tests/                       → 39/39 pass
 ```
 
 ---

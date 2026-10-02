@@ -1,11 +1,21 @@
 # Example: copy this file into your repo as `.pre-commit-config.yaml`.
 # Requires that `pa1-lint` is installed in the active Python env.
+#
+# What happens on every `git commit`:
+#   1. pre-commit invokes `pa1-lint scan --staged`.
+#   2. The tool runs `git diff --cached` and scans the added lines.
+#   3. If any HIGH+ finding is found, exit 1 or 2.
+#   4. pre-commit blocks the commit and prints the masked report.
+#   5. The user uncomments, "commit -e --reset-author" or the file is
+#      fixed and re-staged.
 repos:
   - repo: local
     hooks:
       - id: pa1-lint-staged
-        name: PA1 PII linter (staged files)
-        entry: pa1-lint scan
+        name: PA1 PII linter (staged diff)
+        description: Scan only the lines staged in the current commit and block on HIGH+ PII.
+        entry: pa1-lint scan --staged
         language: system
-        pass_filenames: true
-        types: [csv, jsonl, markdown]
+        pass_filenames: false
+        stages: [pre-commit, manual]
+        types_or: [csv, jsonl, markdown]

@@ -49,3 +49,4 @@
 | Date | Topic | Status | File |
 |---|---|---|---|
 | 2026-10-02 | Fix `_list_files` to handle single-file paths | ✅ done | [`2026-10-02_bugfix-scan-single-file.md`](2026-10-02_bugfix-scan-single-file.md) |
+| 2026-10-02 | Slice 3 — commit-time diff scan (`--staged`, pre-commit hook, `file:line` locations) | ✅ done | [`2026-10-02_commit-time-diff-scan.md`](2026-10-02_commit-time-diff-scan.md) |
