@@ -1,9 +1,8 @@
-# PLAN.md — PA1 PII Linter (Slice 1)
+# PLAN.md — PA1 PII Linter (Slices 1–2)
 
-> **Condensed version of [`.cursor/plans/pa1_pii_linter_slice_1_(v3_-_flat_root_+_ecc_+_docs)_2cfee7f3.plan.md`](.cursor/plans/pa1_pii_linter_slice_1_(v3_-_flat_root_+_ecc_+_docs)_2cfee7f3.plan.md)**
->
 > This file is the **single source of truth** for project goal and scope.
-> Detailed per-todo steps live in `.cursor/plans/`.
+> Detailed history and design decisions: [docs/PLAN.md](docs/PLAN.md).
+> Session log: [Worklog/INDEX.md](Worklog/INDEX.md).
 
 ## Goal
 
@@ -70,9 +69,6 @@ vn-pii/
 
 | You want to | Read |
 |---|---|
-| Understand where the project is heading | This file |
-| See per-todo steps that are done / in progress | `.cursor/plans/<plan-id>.plan.md` |
-| See what was fixed and at which session | `Worklog/INDEX.md` |
-| Understand package architecture | `docs/architecture.md` |
-| Add a new detector / entity | `docs/contributing.md` |
-| Install or troubleshoot | `docs/user-guide.md` |
+| Understand where the project is heading | This file + [docs/PLAN.md](docs/PLAN.md) |
+| Design decisions, architecture, regex reference | [docs/PLAN.md](docs/PLAN.md) |
+| See what was fixed and at which session | [Worklog/INDEX.md](Worklog/INDEX.md) |
