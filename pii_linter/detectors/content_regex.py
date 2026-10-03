@@ -19,6 +19,13 @@ _RE_VN_PHONE = re.compile(r"(?:\+84|0)\d{9}\b")
 # CCCD: 12 digits, CMND: 9 digits (CMND rarely used since 2025).
 _RE_CCCD = re.compile(r"\b0\d{11}\b")        # 12 digits starting with 0
 _RE_CMND = re.compile(r"\b\d{9}\b")          # 9 digits (heuristic only with hint)
+# CMND (9 digits) is too noisy on its own, so we gate it: emit a finding only
+# when the value carries an ID_NUMBER column hint OR a keyword from this set
+# (case-insensitive). Supports free-text scanning without column-name hints.
+_CMND_KEYWORDS = re.compile(
+    r"\b(cmnd|cmt|cmtnd|cccd|căn\s*cước|can\s*cuoc|id_number|identity)\b",
+    re.IGNORECASE,
+)
 # Email: local@domain.tld (no IP literals, no quoted local).
 _RE_EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 # VIN: 17 chars, no I/O/Q.
@@ -58,9 +65,11 @@ def scan_value(
     hints = list(column_hints)
     hint_entities = {h.entity for h in hints}
     out: list[Finding] = []
+    cmnd_unlocked = "ID_NUMBER" in hint_entities or bool(_CMND_KEYWORDS.search(value))
     for pat, entity in _PATTERNS:
-        # CMND (9 digits) is too noisy on its own — require an ID_NUMBER hint.
-        if pat is _RE_CMND and "ID_NUMBER" not in hint_entities:
+        # CMND (9 digits) is too noisy on its own — unlock only when the
+        # column hint says so OR the value itself carries an ID keyword.
+        if pat is _RE_CMND and not cmnd_unlocked:
             continue
         for m in pat.finditer(value):
             sev = resolve_severity(entity)

@@ -34,9 +34,20 @@ def test_plate_matches() -> None:
     assert any(f.entity == "ASSET" for f in findings)
 
 
-def test_cmnd_requires_id_hint() -> None:
+def test_cmnd_requires_id_hint_or_keyword() -> None:
+    # No ID_NUMBER hint, no keyword → 9-digit run must NOT be flagged.
     assert scan_value("order 123456789 today", []) == []
+    # ID_NUMBER hint still unlocks CMND (legacy path).
     findings = scan_value("CMND 123456789", _h(("ID_NUMBER", HIGH)))
+    assert any(f.entity == "ID_NUMBER" for f in findings)
+    # Keyword in free-text unlocks CMND even without column hint.
+    findings = scan_value("CCCD: 123456789 xin chao", [])
+    assert any(f.entity == "ID_NUMBER" for f in findings)
+    # Keyword case-insensitive.
+    findings = scan_value("cmnd 123456789", [])
+    assert any(f.entity == "ID_NUMBER" for f in findings)
+    # Vietnamese keyword variant.
+    findings = scan_value("căn cước 123456789", [])
     assert any(f.entity == "ID_NUMBER" for f in findings)
 
 
