@@ -11,6 +11,14 @@ from dataclasses import dataclass
 
 __version__ = "0.1.0"
 
+# File extensions the linter claims to cover. The filesystem scan
+# (``cli._list_files``) and both diff scans (``cli.scan_staged`` and
+# ``guard``) filter on this, so it lives in the package root rather than in
+# one module: ``guard`` cannot import ``cli`` (``cli`` imports ``guard``
+# lazily), and a guard that scanned files outside this set would contradict
+# the documented CSV/JSONL/Markdown scope.
+TARGET_EXTS = frozenset({".csv", ".jsonl", ".md"})
+
 
 @dataclass(frozen=True)
 class Finding:

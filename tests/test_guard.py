@@ -92,20 +92,33 @@ def test_guard_blocks_post_commit_introduced_pii(tmp_path, monkeypatch) -> None:
     assert rc == 2, "post-scan must catch PII the wrapped command committed"
 
 
-def test_guard_post_scan_passes_when_nothing_new_is_introduced(
-    tmp_path, monkeypatch
-) -> None:
-    """Bug 4 negative: when the inner command only commits benign content, exit 0."""
+def test_guard_only_scans_documented_formats(tmp_path, monkeypatch) -> None:
+    """Guard must honour the documented CSV/JSONL/Markdown scope.
+
+    It used to collect `+` lines from every file in the diff, so a `.py`
+    or `.sh` file that merely mentioned a phone number blocked the commit
+    even though the tool only claims to cover three formats.
+    """
     repo = _init_repo(tmp_path)
     monkeypatch.chdir(repo)
-    script = tmp_path / "plant_safe.sh"
-    script.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf 'col\\nbenign\\n' > safe.csv\n"
-        "git add safe.csv\n"
-        "git -c user.name=t -c user.email=t@t.test commit -q -m 'safe'\n",
-        encoding="utf-8",
+    (repo / "data.py").write_text('phone = "0912345678"\n', encoding="utf-8")
+    (repo / "run.sh").write_text("echo 0912345678\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=str(repo), check=True)
+    assert guard_run(["echo", "ok"]) == 0
+
+
+def test_guard_still_scans_csv_and_md(tmp_path, monkeypatch) -> None:
+    """The same PII in an in-scope format must still be caught."""
+    repo = _init_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    (repo / "leak.csv").write_text(
+        "sdt\n0912345678\n", encoding="utf-8"
     )
-    script.chmod(0o755)
-    rc = guard_run([str(script)])
-    assert rc == 0
+    subprocess.run(["git", "add", "-A"], cwd=str(repo), check=True)
+    assert guard_run(["echo", "should-not-run"]) == 2
+
+    subprocess.run(["git", "rm", "-q", "--cached", "leak.csv"], cwd=str(repo), check=True)
+    subprocess.run(["git", "reset", "-q", "--hard"], cwd=str(repo), check=True)
+    (repo / "notes.md").write_text("# notes\ncall 0912345678\n", encoding="utf-8")
+    subprocess.run(["git", "add", "notes.md"], cwd=str(repo), check=True)
+    assert guard_run(["echo", "should-not-run"]) == 2

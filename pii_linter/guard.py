@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pii_linter import Finding, ScanResult
+from pii_linter import Finding, ScanResult, TARGET_EXTS
 from pii_linter.detectors.column_name import score_column
 from pii_linter.detectors.content_regex import scan_value as scan_content_fn
 from pii_linter.detectors.free_text import apply_combo as apply_combo_fn
@@ -23,7 +23,14 @@ from pii_linter.severity import HIGH
 
 
 def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
-    """Return lines added by ``git diff <refs...>`` ('+' lines, marker stripped)."""
+    """Return lines added by ``git diff <refs...>`` ('+' lines, marker stripped).
+
+    Only files whose extension is in ``TARGET_EXTS`` are included, matching
+    ``cli.scan_staged``. Without this filter the guard scanned *every* file
+    in the diff - including ``.py`` - so committing a test file that merely
+    mentions a synthetic phone number blocked the commit even though the
+    tool only ever claims to cover CSV/JSONL/Markdown.
+    """
     exe = shutil.which("git")
     if exe is None:
         return ""
@@ -38,9 +45,19 @@ def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
     except (OSError, subprocess.SubprocessError):
         return ""
     added: list[str] = []
+    current = ""
     for line in out.stdout.splitlines():
+        if line.startswith("diff --git"):
+            parts = line.split()
+            current = parts[3].lstrip("b/") if len(parts) > 3 else ""
+            continue
+        if line.startswith("+++"):
+            # b/<path> - trust this over the diff --git header.
+            current = line[4:].strip().lstrip("b/") if len(line) > 4 else current
+            continue
         if line.startswith("+") and not line.startswith("+++"):
-            added.append(line[1:])
+            if current and Path(current).suffix.lower() in TARGET_EXTS:
+                added.append(line[1:])
     return "\n".join(added)
 
 

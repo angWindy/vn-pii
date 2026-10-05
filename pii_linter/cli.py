@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-from pii_linter import Finding, ScanResult
+from pii_linter import Finding, ScanResult, TARGET_EXTS
 from pii_linter.detectors.column_name import score_column
 from pii_linter.detectors.content_regex import scan_value as scan_content
 from pii_linter.detectors.free_text import apply_combo
@@ -35,7 +35,7 @@ from pii_linter.suppressions import (
 
 
 _MAX_DEPTH = 3
-_TARGET_EXTS = {".csv", ".jsonl", ".md"}
+_TARGET_EXTS = TARGET_EXTS
 _MD_TABLE_LINE = re.compile(r"^\s*\|.*\|\s*$")
 
 
