@@ -52,3 +52,19 @@ def test_guard_skipped_outside_git(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     rc = guard_run(["echo", "ok"])
     assert rc == 0
+
+
+def test_guard_dashdash_separator_is_stripped(tmp_path, monkeypatch) -> None:
+    """Bug 3: `pa1-lint guard -- <cmd>` must not pass `--` to subprocess.
+
+    Before the fix, argparse.REMAINDER swallowed the `--` separator
+    and subprocess tried to exec it as argv[0], raising FileNotFoundError.
+    The aider template relies on this syntax, so the breakage also nuked
+    every `pa1-lint-aider` invocation.
+    """
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = guard_run(["--", "echo", "ok"])
+    assert rc == 0
+    rc = guard_run(["echo", "ok"])
+    assert rc == 0

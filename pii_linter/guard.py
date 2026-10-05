@@ -70,6 +70,16 @@ def _fake_result(findings: list[Finding]) -> ScanResult:
 
 def run(cmd: list[str]) -> int:
     """Pre-scan, run ``cmd``, post-scan. Return the worst exit code."""
+    # `argparse.REMAINDER` swallows the conventional `--` separator
+    # (`pa1-lint guard -- aider ...`), leaving it as argv[0] and making
+    # subprocess raise FileNotFoundError. Normalise it away here so every
+    # caller is safe, not just the one that went through the CLI.
+    cmd = list(cmd)
+    if cmd and cmd[0] == "--":
+        cmd = cmd[1:]
+    if not cmd:
+        sys.stderr.write("[pa1-guard] no command given; nothing to run.\n")
+        return 2
     cwd = Path.cwd()
     if not (cwd / ".git").exists():
         sys.stderr.write(
