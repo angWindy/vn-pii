@@ -20,6 +20,11 @@ from pii_linter.detectors.free_text import apply_combo as apply_combo_fn
 from pii_linter.detectors.luhn_card import detect_card
 from pii_linter.report import render_markdown
 from pii_linter.severity import HIGH
+from pii_linter.suppressions import Suppression, is_suppressed, load_suppressions
+
+# Default suppressions file at the repo root, if present. Diff-scanned lines
+# have no column header, so these records match on ``value_prefix`` alone.
+_SUPPRESSIONS_FILE = Path(__file__).resolve().parent.parent / "suppressions.toml"
 
 
 def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
@@ -27,7 +32,7 @@ def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
 
     Only files whose extension is in ``TARGET_EXTS`` are included, matching
     ``cli.scan_staged``. Without this filter the guard scanned *every* file
-    in the diff - including ``.py`` - so committing a test file that merely
+    in the diff — including ``.py`` — so committing a test file that merely
     mentions a synthetic phone number blocked the commit even though the
     tool only ever claims to cover CSV/JSONL/Markdown.
     """
@@ -52,7 +57,7 @@ def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
             current = parts[3].lstrip("b/") if len(parts) > 3 else ""
             continue
         if line.startswith("+++"):
-            # b/<path> - trust this over the diff --git header.
+            # b/<path> — trust this over the diff --git header.
             current = line[4:].strip().lstrip("b/") if len(line) > 4 else current
             continue
         if line.startswith("+") and not line.startswith("+++"):
@@ -90,12 +95,23 @@ def _has_high_plus(findings: list[Finding]) -> bool:
     return any(f.severity >= HIGH for f in findings)
 
 
-def _scan_diff_text(text: str) -> list[Finding]:
-    """Scan the synthetic blob of staged/added lines."""
+def _scan_diff_text(
+    text: str,
+    suppressions: list[Suppression] | None = None,
+) -> list[Finding]:
+    """Scan the synthetic blob of staged/added lines.
+
+    ``suppressions`` is optional for backwards compatibility; pass the
+    loaded records so diff-scanned lines honour them just like the
+    ``scan`` path does. Diff lines carry no column header, so
+    suppressions are matched with an empty column name.
+    """
     if not text.strip():
         return []
     findings: list[Finding] = []
     for line in text.splitlines():
+        if suppressions and is_suppressed("", line, suppressions):
+            continue
         card = detect_card(line)
         if card is not None:
             findings.append(card)
@@ -120,7 +136,18 @@ def run(cmd: list[str]) -> int:
     if not cmd:
         sys.stderr.write("[pa1-guard] no command given; nothing to run.\n")
         return 2
+
     cwd = Path.cwd()
+    # Load suppressions once so the diff path honours the same records as
+    # `scan --suppressions`. Diff lines have no column context, so
+    # suppressions only match on `value_prefix`.
+    suppressions: list[Suppression] = []
+    if _SUPPRESSIONS_FILE.exists():
+        try:
+            suppressions = load_suppressions(_SUPPRESSIONS_FILE)
+        except ValueError:
+            suppressions = []
+
     if not (cwd / ".git").exists():
         sys.stderr.write(
             "[pa1-guard] not a git repo; running command without guard.\n"
@@ -129,7 +156,7 @@ def run(cmd: list[str]) -> int:
         return proc.returncode
 
     pre_text = _git_diff_text(cwd)
-    pre_findings = _scan_diff_text(pre_text)
+    pre_findings = _scan_diff_text(pre_text, suppressions)
     if _has_high_plus(pre_findings):
         sys.stderr.write(
             "[pa1-guard] BLOCKED: pre-scan found HIGH+ findings. "
@@ -150,12 +177,12 @@ def run(cmd: list[str]) -> int:
 
     post_head = _head_sha(cwd)
     if pre_head and post_head and post_head != pre_head:
-        # The command created commits - diff old HEAD..new HEAD so the
+        # The command created commits — diff old HEAD..new HEAD so the
         # committed content is actually inspected.
         post_text = _diff_added_lines(cwd, [pre_head, post_head])
     else:
         post_text = _git_diff_text(cwd)
-    post_findings = _scan_diff_text(post_text)
+    post_findings = _scan_diff_text(post_text, suppressions)
     pre_masks = {f.evidence_raw for f in pre_findings}
     new = [f for f in post_findings if f.evidence_raw not in pre_masks]
     if _has_high_plus(new):

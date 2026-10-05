@@ -82,6 +82,6 @@ def test_invalid_entry(tmp_path) -> None:
 def test_repo_root_suppressions_loads() -> None:
     """The committed suppressions.toml at the repo root must load cleanly."""
     sups = load_suppressions("suppressions.toml")
-    assert len(sups) == 3
+    assert len(sups) == 4
     assert sups[0].column_pattern == "customer_id"
     assert sups[0].value_prefix == "id_"

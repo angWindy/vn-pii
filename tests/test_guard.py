@@ -122,3 +122,32 @@ def test_guard_still_scans_csv_and_md(tmp_path, monkeypatch) -> None:
     (repo / "notes.md").write_text("# notes\ncall 0912345678\n", encoding="utf-8")
     subprocess.run(["git", "add", "notes.md"], cwd=str(repo), check=True)
     assert guard_run(["echo", "should-not-run"]) == 2
+
+
+def test_scan_diff_text_honours_suppressions() -> None:
+    """Guard's diff scanner must accept suppressions, matching `scan`.
+
+    A synthetic value carried by a diff line should be suppressible even
+    though the diff gives no column header to match against.
+    """
+    from datetime import date
+
+    from pii_linter.detectors.free_text import apply_combo
+    from pii_linter.detectors.content_regex import scan_value
+    from pii_linter.guard import _scan_diff_text
+    from pii_linter.suppressions import Suppression
+
+    line = "dummy_0912345678 is fine"
+    assert _scan_diff_text(line), "sanity: unsuppressed line is flagged"
+    sups = [
+        Suppression(
+            column_pattern=".*",
+            value_prefix="dummy",
+            owner="test",
+            expires_at=date(2099, 1, 1),
+            reason="synthetic",
+        )
+    ]
+    assert _scan_diff_text(line, sups) == []
+    # And a non-suppressed line still gets scanned when sups are loaded.
+    assert _scan_diff_text("0912345678 raw", sups)

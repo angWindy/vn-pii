@@ -25,3 +25,15 @@ value_prefix = "0"
 owner = "synth-data-team"
 expires_at = 2027-12-31
 reason = "0-padded accounts are seed values."
+
+# The pre-commit hook and the agent guards scan added diff lines, which have
+# no column header to match against, so `column_pattern` is broad here and
+# the record keys off `value_prefix` alone. Only clearly-synthetic literals
+# belong in this list (see AGENTS.md §7): the RFC-reserved 0912345678 and
+# example.com pair, plus Luhn-valid test PANs. Never add real customer data.
+[[suppressions]]
+column_pattern = ".*"
+value_prefix = "dummy"
+owner = "synth-data-team"
+expires_at = 2027-12-31
+reason = "dummy-prefixed synthetic values in tests/ and fixtures/."

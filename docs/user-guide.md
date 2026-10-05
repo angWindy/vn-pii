@@ -139,11 +139,19 @@ pa1-lint guard -- claude -p "..."
 
 The wrapper:
 
-1. Snapshots `git diff HEAD` (added text).
+1. Snapshots `git diff HEAD` (added text in `.csv` / `.jsonl` / `.md` files
+   only — other file types are outside the documented scope).
 2. Scans that text. If HIGH+ findings exist, the command is not run and
    the wrapper exits `2`.
-3. Runs the wrapped command.
-4. Re-scans `git diff HEAD`. If new HIGH+ findings appeared, exits `2`.
+3. Records the current `HEAD`, then runs the wrapped command.
+4. Re-scans, anchored to the `HEAD` from step 3. If the command created
+   commits the diff is `<old HEAD>..<new HEAD>`, so PII the command
+   committed is still inspected; otherwise it is the live `git diff HEAD`.
+   New HIGH+ findings exit `2`.
+
+Step 4 is anchored deliberately: a plain `git diff HEAD` goes blind once
+the wrapped command commits, because the staged content has become part of
+`HEAD` and the diff comes back empty.
 
 This is meant to be wired into your shell alias:
 
