@@ -11,6 +11,8 @@ is implementation detail and may change.
 - **Python:** `>= 3.11` (stdlib `tomllib` is required for `suppressions.toml`)
 - **Runtime dependencies:** `[]` (zero)
 - **Install:** `pip install git+https://github.com/angWindy/vn-pii`
+- **After install:** `pa1-lint <path>` works immediately. No subcommand
+  required, no `PATH` setup, no config file.
 
 ## Public dataclasses (in `pii_linter`)
 
@@ -83,13 +85,33 @@ and is the single source of truth.
 | `load_suppressions(path)` | `pii_linter.suppressions` | YAML loader |
 | `is_suppressed(col, value, sups)` | `pii_linter.suppressions` | Match predicate |
 | `scan_path(root, suppressions_path)` | `pii_linter.cli` | End-to-end scan |
+| `scan(root, suppressions_path)` | `pii_linter` (alias of `cli.scan_path`) | Same, for `from pii_linter import scan` |
+| `scan_staged(cwd, suppressions_path)` | `pii_linter` (alias of `cli.scan_staged`) | Staged-diff scan |
 | `run(cmd)` | `pii_linter.guard` | Pre/post-scan wrapper |
+
+`scan` and `scan_staged` are re-exported from the package root. They resolve
+lazily (PEP 562) because every detector imports `pii_linter` back, so a
+top-level `from pii_linter.cli import ...` would be circular. Importing
+`pii_linter` does **not** import `pii_linter.cli` until one of these names
+is touched.
 
 ## CLI
 
-### `pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]`
+### Entry points
 
-- Recursively walks `<path>` for `.csv`, `.jsonl`, `.md` up to depth 3.
+| Form | Notes |
+|---|---|
+| `pa1-lint [PATH]` | Console script. `scan` is optional. |
+| `pa1-lint scan [PATH]` | Explicit subcommand; identical behaviour. |
+| `python -m pii_linter [PATH]` | Same as the console script, no `PATH` setup needed. |
+| `from pii_linter import scan` | Library call; returns a `ScanResult`. |
+
+Omitting `PATH` scans the current directory. `guard` and `install-hooks`
+still require their subcommand — they are not dataset scans.
+
+### `pa1-lint [PATH] [--format {markdown,json}] [--suppressions PATH]`
+
+- Recursively walks `PATH` (default `.`) for `.csv`, `.jsonl`, `.md` up to depth 3.
 - Loads `suppressions.toml` from `--suppressions PATH` (default: none).
 - Prints Markdown (default) or JSON to stdout.
 - Exit code:
@@ -99,7 +121,7 @@ and is the single source of truth.
 
 #### `pa1-lint scan --staged [--suppressions PATH]`
 
-- Does **not** take a positional `PATH`.
+- Does **not** take a positional `PATH`; any `PATH` given is ignored.
 - Runs `git diff --cached --unified=0 --no-renames` and scans only the
   lines introduced by the staged changes.
 - Output uses a `file:line | entity | severity | evidence_masked` table so

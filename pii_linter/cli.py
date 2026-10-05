@@ -1,9 +1,11 @@
 """PA1 PII Linter CLI entrypoint.
 
 Usage:
+    pa1-lint [PATH]                 # same as `pa1-lint scan PATH`; bare -> cwd
     pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
     pa1-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
     pa1-lint guard -- <cmd>...
+    python -m pii_linter [PATH]      # identical to `pa1-lint`
 
 The tool runs in any Python 3.11+ environment (no conda env check in
 Slice 2+).
@@ -310,9 +312,6 @@ def _exit_for(findings: list[Finding]) -> int:
 def _cmd_scan(args: argparse.Namespace) -> int:
     if args.staged:
         result = scan_staged(suppressions_path=args.suppressions)
-    elif args.path is None:
-        sys.stderr.write("Error: PATH is required unless --staged is set.\n")
-        return EX_USAGE
     else:
         result = scan_path(args.path, suppressions_path=args.suppressions)
     if args.format == "json":
@@ -410,11 +409,11 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pa1-lint",
         description="Local-only PII linter for VN datasets (CSV/JSONL/Markdown).",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=False)
 
     p_scan = sub.add_parser("scan", help="Scan a directory tree or staged diff for PII.")
-    p_scan.add_argument("path", nargs="?", default=None,
-                        help="Root directory to scan recursively. Omit when --staged is set.")
+    p_scan.add_argument("path", nargs="?", default=".",
+                        help="Root directory to scan recursively (default: the current directory).")
     p_scan.add_argument(
         "--format",
         choices=("markdown", "json"),
@@ -478,9 +477,32 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Every subcommand the parser defines. If argv[0] is one of these the user is
+# naming a command explicitly and it is left alone. `guard` / `install-hooks`
+# are not dataset scans, so they keep their name; `scan` is spelled out here
+# only to stay backward compatible with the documented form.
+_ALL_COMMANDS = ("scan", "guard", "install-hooks")
+_ROOT_FLAGS = ("-h", "--help")
+
+
+def _normalise_argv(argv: list[str]) -> list[str]:
+    """Allow `pa1-lint <path>` and bare `pa1-lint` to mean "scan".
+
+    ``pa1-lint data.csv`` is rewritten to ``scan data.csv`` and a bare
+    ``pa1-lint`` scans the current directory. Anything that already names a
+    subcommand, or asks for root help, is passed through untouched.
+    """
+    if not argv:
+        return ["scan", "."]
+    if argv[0] in _ALL_COMMANDS or argv[0] in _ROOT_FLAGS:
+        return argv
+    return ["scan", *argv]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(_normalise_argv(raw))
     return args.func(args)
 
 

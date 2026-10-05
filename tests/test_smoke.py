@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -214,3 +215,126 @@ def test_critical_pii_still_exits_2(tmp_path: Path) -> None:
         text=True,
     )
     assert proc.returncode == 2
+
+
+# ---------------------------------------------------------------------------
+# Zero-friction entry points: `pa1-lint <path>`, bare `pa1-lint`, and
+# `python -m pii_linter` all work without naming the `scan` subcommand.
+# ---------------------------------------------------------------------------
+
+
+def _planted_csv(tmp_path: Path) -> Path:
+    """A CSV with a HIGH-severity PHONE, so exit code is 1."""
+    csv = tmp_path / "leads.csv"
+    csv.write_text("name,phone\nNam,0912345678\n", encoding="utf-8")
+    return csv
+
+
+def test_bare_pa1_lint_scans_cwd(tmp_path: Path) -> None:
+    """A bare `pa1-lint` scans the current directory and finds PII."""
+    _planted_csv(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "PHONE" in proc.stdout
+
+
+def test_path_without_scan_subcommand(tmp_path: Path) -> None:
+    """`pa1-lint data.csv` is the same as `pa1-lint scan data.csv`."""
+    csv = _planted_csv(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", str(csv)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "PHONE" in proc.stdout
+
+
+def test_explicit_scan_subcommand_still_works(tmp_path: Path) -> None:
+    """The documented `scan <path>` form must not regress."""
+    csv = _planted_csv(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "scan", str(csv)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "PHONE" in proc.stdout
+
+
+def test_module_entry_point_matches_cli(tmp_path: Path) -> None:
+    """`python -m pii_linter` mirrors the console script exactly."""
+    csv = _planted_csv(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", str(csv)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "PHONE" in proc.stdout
+
+
+def test_scan_flag_routes_to_scan_subcommand(tmp_path: Path) -> None:
+    """A leading `--format json` must scan, not error as an unknown root flag."""
+    csv = _planted_csv(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "--format", "json", str(csv)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    payload = json.loads(proc.stdout)
+    assert any(f["entity"] == "PHONE" for f in payload["findings"])
+
+
+def test_root_help_still_prints_usage() -> None:
+    """`pa1-lint --help` must show root help, not fall through to a scan."""
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0
+    assert "usage:" in proc.stdout.lower()
+    assert "install-hooks" in proc.stdout
+
+
+def test_unknown_flag_still_exits_ex_usage(tmp_path: Path) -> None:
+    """Normalising argv must not swallow a typo into a PII exit code."""
+    from pii_linter.cli import EX_USAGE
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "--no-such-flag"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == EX_USAGE
+    assert proc.returncode != 1
+    assert proc.returncode != 2
+
+
+def test_import_scan_from_package_root(tmp_path: Path) -> None:
+    """`from pii_linter import scan` works and returns a ScanResult."""
+    from pii_linter import ScanResult, scan
+
+    csv = _planted_csv(tmp_path)
+    result = scan(str(csv))
+    assert isinstance(result, ScanResult)
+    assert any(f.entity == "PHONE" for f in result.findings)
+
+
+def test_lazy_import_does_not_break_plain_import() -> None:
+    """`import pii_linter` must stay cycle-free (no cli import at module scope)."""
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         "import pii_linter, sys; assert 'pii_linter.cli' not in sys.modules"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr

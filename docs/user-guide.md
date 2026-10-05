@@ -40,9 +40,12 @@ and `pytest`. None of them are required at scan time.
 ## Run a one-off scan
 
 ```bash
-pa1-lint scan path/to/dataset --format markdown
-pa1-lint scan path/to/dataset --format json --suppressions suppressions.toml
+pa1-lint path/to/dataset --format markdown
+pa1-lint path/to/dataset --format json --suppressions suppressions.toml
 ```
+
+`scan` is optional — `pa1-lint scan <path>` is accepted too, it just spells
+out the verb. Run `pa1-lint` with no path to scan the current directory.
 
 JSON is easier to wire into CI dashboards. Markdown is preferred when you
 want a human-readable report.
@@ -63,7 +66,7 @@ reason = "Faker seed 42; verified by tests/test_smoke.py"
 Pass it to the scan:
 
 ```bash
-pa1-lint scan path/to/dataset --suppressions suppressions.toml
+pa1-lint path/to/dataset --suppressions suppressions.toml
 ```
 
 ### Best practices
@@ -242,6 +245,13 @@ python -m pip show pa1-pii-linter
 
 If you used a virtual environment, make sure it is activated before
 running `pa1-lint`.
+
+If you cannot or do not want to fix `PATH`, run the module directly — it
+is the same program and returns the same exit codes:
+
+```bash
+python -m pii_linter path/to/dataset
+```
 
 ### `Python 3.11 or newer is required`
 

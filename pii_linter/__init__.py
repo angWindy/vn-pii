@@ -64,3 +64,39 @@ class ScanResult:
     findings: list[Finding]
     files_scanned: int
     by_file: dict[str, list[Finding]]
+
+
+# Public callables, resolved lazily. ``scan`` is the import-friendly alias for
+# ``cli.scan_path``. ``cli`` cannot be imported at module scope: every detector
+# imports this module back (``from pii_linter import Finding``), so a top-level
+# import would be circular. PEP 562 defers it to first attribute access, which
+# keeps a bare ``import pii_linter`` cheap and cycle-free.
+_LAZY_EXPORTS = {
+    "scan": ("pii_linter.cli", "scan_path"),
+    "scan_staged": ("pii_linter.cli", "scan_staged"),
+}
+
+__all__ = [
+    "ColumnHint",
+    "Finding",
+    "ScanResult",
+    "TARGET_EXTS",
+    "scan",
+    "scan_staged",
+]
+
+
+def __getattr__(name: str):
+    if name in _LAZY_EXPORTS:
+        import importlib
+
+        mod_name, attr = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(mod_name), attr)
+        # Cache in module globals so repeat lookups skip __getattr__ entirely.
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)

@@ -23,8 +23,32 @@ commands (Cursor, Aider, Claude Code).
 
 ```bash
 pip install git+https://github.com/angWindy/vn-pii
-pa1-lint scan path/to/your/dataset
-pa1-lint scan path/to/your/dataset --suppressions suppressions.toml
+pa1-lint path/to/your/dataset
+```
+
+`pa1-lint` on its own scans the current directory. `scan` is optional, so
+`pa1-lint scan <path>` (the older, explicit form) still works identically.
+
+If the console script is not on your `PATH` (no virtualenv, no conda env),
+the module entry point is equivalent:
+
+```bash
+python -m pii_linter path/to/your/dataset
+```
+
+Suppressions:
+
+```bash
+pa1-lint path/to/your/dataset --suppressions suppressions.toml
+```
+
+And as a plain library call:
+
+```python
+from pii_linter import scan
+
+result = scan("path/to/your/dataset")
+print(len(result.findings))
 ```
 
 That is the whole install story. The tool pulls **zero** extra packages
@@ -37,7 +61,7 @@ git clone https://github.com/angWindy/vn-pii
 cd vn-pii
 pip install -e .[dev]
 python fixtures/generators/make_synthetic.py --out gold negative
-pa1-lint scan fixtures/gold
+pa1-lint fixtures/gold
 pytest tests/
 ```
 
@@ -84,7 +108,7 @@ pa1-lint guard -- aider --message "summarise repo"
 
 ## Safety
 
-- **All fixtures are synthetic.** Do not point `pa1-lint scan` at real
+- **All fixtures are synthetic.** Do not point `pa1-lint` at real
   customer data; the report intentionally shows masked evidence but the
   scan keeps raw evidence in memory.
 - **Never suppress real customer data.** Suppressions exist for clearly
