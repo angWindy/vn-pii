@@ -51,3 +51,4 @@
 | 2026-10-02 | Fix `_list_files` to handle single-file paths | ✅ done | [`2026-10-02_bugfix-scan-single-file.md`](2026-10-02_bugfix-scan-single-file.md) |
 | 2026-10-02 | Slice 3 — commit-time diff scan (`--staged`, pre-commit hook, `file:line` locations) | ✅ done | [`2026-10-02_commit-time-diff-scan.md`](2026-10-02_commit-time-diff-scan.md) |
 | 2026-10-02 | Review pass — relative path key, dedupe free_text scan, email mask | ✅ done | [`2026-10-02_review-pass-fixes.md`](2026-10-02_review-pass-fixes.md) |
+| 2026-10-05 | Bug sweep — pre-commit `types_or`, `guard --`, md prose, guard post-scan, exit codes | ✅ done | [`2026-10-05_bug-sweep-5-bugs.md`](2026-10-05_bug-sweep-5-bugs.md) |
