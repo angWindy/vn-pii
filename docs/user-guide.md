@@ -1,34 +1,45 @@
 # User guide
 
 PA1 PII Linter ships as a zero-dependency Python package plus a CLI entry
-point. You can use it two different ways: as a **pre-commit hook**
-(recommended for any project that touches CSV / JSONL data) or as a
-**wrapper** around an AI agent command.
-
-Slice 2 made the tool work in any Python 3.11+ environment with a single
-`pip install` and **no** extra packages.
+point. One command installs it and switches on a git hook that covers every
+repository on your machine — after that, a plain `git commit` blocks PII
+with no per-repo setup.
 
 ## Install
 
-### End user (your own project)
-
-Install into **any** Python 3.11+ environment you already use — a conda env,
-a virtualenv, or on macOS/Windows the plain system Python:
+### The one command
 
 ```bash
-conda activate pa1            # or: source .venv/bin/activate
-pip install git+https://github.com/angWindy/vn-pii
+curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
 ```
 
-That is it. `pa1-lint` is now on your `PATH`. The tool has zero runtime
-dependencies, so this command does not pull anything else.
+This picks a Python 3.11+ interpreter, installs the package with `pipx`
+(falling back to `pip`), and runs `pa1-lint init` to install the global git
+hook. There is no second step and nothing to do per repo.
 
 Verify:
 
 ```bash
 pa1-lint --version          # 0.1.0
-pa1-lint --help
+git config --get core.hooksPath    # -> ~/.githooks
 ```
+
+### Doing it in two steps
+
+Identical result, if you would rather control the install:
+
+```bash
+pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
+pa1-lint init
+```
+
+`pip install` on its own does **not** enable the hook: pip has no
+post-install script mechanism (PEP 660 metadata is written but no code is
+executed), so `init` has to be invoked explicitly.
+
+`pipx` is preferred because it keeps the tool out of your project
+environments. Any Python 3.11+ env works — a conda env, a virtualenv, or
+on macOS/Windows the plain system Python. Zero runtime dependencies.
 
 ### If you hit `error: externally-managed-environment`
 
@@ -98,24 +109,47 @@ pa1-lint path/to/dataset --suppressions suppressions.toml
 - Never suppress real customer data. If you find yourself needing to,
   the right fix is to remove the data, not silence the scanner.
 
-## Pre-commit hook
+## The git hook (zero-config)
 
-1. Copy [`examples/pre-commit-config.yaml`](examples/pre-commit-config.yaml)
-   into your repo as `.pre-commit-config.yaml`.
-2. Make sure `pa1-lint` is installed in the active Python env
-   (`pa1-lint --version` should work).
-3. Install pre-commit:
+`pa1-lint init` installs one hook that covers **every** repo on the machine.
+Run it once, after installing the package:
 
-   ```bash
-   pip install pre-commit
-   pre-commit install
-   ```
+```bash
+pa1-lint init
+```
 
-From now on, every `git commit` that touches `.csv` / `.jsonl` /
-`.markdown` files runs `pa1-lint scan --staged` on the staged content.
-**Only the lines added by your commit are scanned** — pre-existing PII
-in lines you did not touch is ignored. The commit is blocked if HIGH or
+From now on, in any repository, every `git commit` scans the staged lines.
+**Only the lines added by your commit are scanned** — pre-existing PII in
+lines you did not touch is ignored. The commit is blocked if HIGH or
 CRITICAL findings appear.
+
+There is nothing to add to any repo. `init` sets `core.hooksPath` to
+`~/.githooks` and writes a `pre-commit` hook there. Because that replaces
+git's hook lookup, it also writes passthrough shims for `commit-msg`,
+`prepare-commit-msg`, `post-commit` and friends, so hooks a repo already
+had keep working.
+
+Preview without touching anything, or remove it again:
+
+```bash
+pa1-lint init --dry-run
+pa1-lint uninstall
+```
+
+### If you use husky or another hook manager
+
+`init` **refuses** to install when the hooks directory already holds a
+`pre-commit` it did not write, because overwriting husky's hook would break
+every commit in your repos. Use the pre-commit framework per repo instead:
+
+1. Merge [`examples/pre-commit-config.yaml`](examples/pre-commit-config.yaml)
+   into your repo's `.pre-commit-config.yaml` — it only adds a `repos:`
+   entry, so keep any prettier/ruff/eslint hooks you already have.
+2. `pip install pre-commit && pre-commit install`.
+
+No `pa1-lint` on your `PATH` is required: the hook entry is
+`python -m pii_linter`, and `language: python` has pre-commit build a
+dedicated environment for it.
 
 If you want to scan everything (not just staged files), call
 `pa1-lint scan <path>` directly.
@@ -125,9 +159,6 @@ If you want to scan everything (not just staged files), call
 ```text
 $ git add leads.csv
 $ git commit -m "Add new leads"
-PA1 PII linter (staged diff)............................Failed
-- hook id: pa1-lint-staged
-- exit code: 1
 
 # PA1 PII scan report
 
@@ -145,7 +176,8 @@ PA1 PII linter (staged diff)............................Failed
 > **Suggestions:** Replace with dummy_<n> or redact to ***.
 ```
 
-Fix the line, re-stage (`git add leads.csv`), and commit again.
+The commit does not happen. Fix the line, re-stage (`git add leads.csv`),
+and commit again.
 
 If you want to scan everything (not just staged files), call
 `pa1-lint scan <path>` directly.
@@ -229,27 +261,32 @@ Imagine you work on `Customer-Analytics` (your own repo) and you want
 every CSV / JSONL commit scanned:
 
 ```bash
-# 1. One-time setup in Customer-Analytics/
-conda activate pa1            # any env; on Debian/Ubuntu system Python use a venv
-pip install pre-commit
-curl -O https://raw.githubusercontent.com/angWindy/vn-pii/main/examples/pre-commit-config.yaml
-mv pre-commit-config.yaml .pre-commit-config.yaml
-pre-commit install
-# No separate `pip install git+...` needed: the config uses `language: python`,
-# so pre-commit builds the tool into its own env on first run.
+# 1. One-time setup, on your machine - not per repo
+curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
+```
 
-# 2. Add a per-project suppressions.toml
-cat > suppressions.toml <<'EOF'
+That is the whole setup. Do **not** copy
+`examples/pre-commit-config.yaml` over an existing `.pre-commit-config.yaml`:
+`mv` overwrites without asking, and you would lose every prettier / ruff /
+eslint hook you already had. If you use the pre-commit framework, merge the
+`repos:` entry in by hand instead.
+
+Optional: a per-project `suppressions.toml` in the repo root. The hook
+picks it up automatically.
+
+```toml
 [[suppressions]]
 column_pattern = "internal_id"
 value_prefix = "id_"
 owner = "data-eng"
 expires_at = 2027-12-31
 reason = "Synthetic IDs generated by our Faker factory."
-EOF
+```
 
-# 3. Commit
-git add data.csv suppressions.toml
+Then just commit:
+
+```bash
+git add data.csv
 git commit -m "Add Q4 customer dataset"   # blocked if HIGH+ findings
 ```
 
@@ -299,29 +336,37 @@ from 3.11. Use `python3.11`, `python3.12`, `python3.13` or newer:
 python3.11 -m pip install git+https://github.com/angWindy/vn-pii
 ```
 
-### Pre-commit hook does not run
+### The hook does not run on commit
 
-Run `pre-commit run --all-files` and check the output. The most common
-causes are:
-
-1. `pa1-lint` is not on `PATH` of the env pre-commit uses. The hook is
-   declared with `language: system`, which means pre-commit calls the
-   literal `pa1-lint` from `PATH`. If you used a virtualenv, run
-   `pre-commit install` from inside that env so the hook can find the
-   binary.
-2. The file you are staging is not in `types_or: [csv, jsonl, markdown]`.
-   pre-commit filters out other extensions; rename or move the file.
-3. `core.hooksPath` is set to a non-empty value (e.g. `.husky`). The
-   pre-commit framework then does not get to install its own hook.
-   ```bash
-   git config --get core.hooksPath    # should be empty / unset
-   ```
-
-To re-run the hook without committing:
+The hook fires from the **global** install, not from a per-repo
+`.pre-commit-config.yaml`, so check these first:
 
 ```bash
-pre-commit run pa1-lint-staged --hook-stage pre-commit
+pa1-lint init --dry-run     # shows the hooks dir and core.hooksPath
+git config --get core.hooksPath
 ```
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No hook at all, `core.hooksPath` empty | never ran `init` | `pa1-lint init` |
+| `pa1-lint: the PII scan did NOT run` | the interpreter baked into the hook is gone (you deleted the venv) | `pa1-lint init` to regenerate, or reinstall the package |
+| `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | use `install-hooks pre-commit --project` per repo |
+| Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pa1-lint init` rewrites the shims |
+
+Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
+fix the hook right now.
+
+If you deliberately use the pre-commit framework instead (the husky case
+above), its own hook is configured by `.pre-commit-config.yaml` and runs
+with `language: python`, so it needs nothing on your `PATH`:
+
+```bash
+pre-commit run pa1-lint-staged --hook-stage pre-commit   # test without committing
+```
+
+Note that if `core.hooksPath` is set (by `init` or by husky), the
+pre-commit framework's own `.git/hooks/pre-commit` is **not** consulted.
+That is expected: only the hooks directory git is pointed at runs.
 
 ### Why is the staged report different from the full report?
 

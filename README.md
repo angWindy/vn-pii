@@ -11,9 +11,9 @@ email, card Luhn, VIN/plate, Zalo handle, free-text blobs) in CSV / JSONL /
 Markdown datasets. Designed to wrap both `git` (pre-commit) and AI-agent
 commands (Cursor, Aider, Claude Code).
 
-> **Status:** Slice 3 (commit-time diff scan). One-command install:
-> `pip install git+https://github.com/angWindy/vn-pii`. No runtime
-> dependencies. Python 3.11+ required.
+> **Status:** zero-config install. One command sets up the package *and* the
+> global git hook, so plain `git commit` blocks PII in any repo with no
+> per-repo setup. No runtime dependencies. Python 3.11+ required.
 >
 > See [docs/spec.md](docs/spec.md) for the public API and
 > [docs/problem/PA1/PA1.md](docs/problem/PA1/PA1.md) for the original
@@ -68,15 +68,39 @@ pytest tests/
 The optional `[dev]` extra pulls `Faker` (for the fixture generator) and
 `pytest`. They are not part of the runtime footprint.
 
-## Quick start — Pre-commit hook in a downstream repo
+## Quick start — one command, every repo
 
-1. `pip install pa1-pii-linter` (or `pip install git+https://...`).
-2. Copy [examples/pre-commit-config.yaml](examples/pre-commit-config.yaml)
-   into your repo as `.pre-commit-config.yaml`.
-3. `pip install pre-commit && pre-commit install`.
+```bash
+curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
+```
 
-From now on every `git commit` that touches CSV / JSONL / Markdown is
-scanned. The commit is blocked if HIGH+ findings appear.
+That installs the package and switches on a global git hook. There is no
+per-repo step: from then on, in any repository on the machine,
+
+```bash
+git add data.csv && git commit -m "add Q4 rows"
+```
+
+scans the staged lines and **blocks the commit** if it contains HIGH or
+CRITICAL PII, printing a masked report to your terminal. Nothing to run,
+nothing to configure, nothing to remember.
+
+Prefer two steps? Same result:
+
+```bash
+pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
+pa1-lint init                                          # install the global hook
+```
+
+| Command | Effect |
+|---|---|
+| `pa1-lint init` | install the global hook (idempotent; `--dry-run` to preview) |
+| `pa1-lint uninstall` | remove it and restore your git config |
+| `pa1-lint install-hooks pre-commit --project` | per-repo instead, if you use husky or another hook manager |
+
+If `init` refuses because another tool (husky) already owns your hooks
+directory, use the per-repo form. That composes with the pre-commit
+framework instead of competing for `core.hooksPath`.
 
 To wrap an AI agent command:
 

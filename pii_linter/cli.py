@@ -1,6 +1,8 @@
 """PA1 PII Linter CLI entrypoint.
 
 Usage:
+    pa1-lint init                     # install the global git hook (one-time)
+    pa1-lint uninstall                # remove it again
     pa1-lint [PATH]                 # same as `pa1-lint scan PATH`; bare -> cwd
     pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
     pa1-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
@@ -385,6 +387,19 @@ def _cmd_install_hooks(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_init(args: argparse.Namespace) -> int:
+    """Install the global git hook. The one-time setup for zero-config use."""
+    from pii_linter.hooks import install_git
+
+    return install_git.install(dry_run=args.dry_run)
+
+
+def _cmd_uninstall(args: argparse.Namespace) -> int:
+    from pii_linter.hooks import install_git
+
+    return install_git.uninstall(dry_run=args.dry_run)
+
+
 def _cmd_guard(args: argparse.Namespace) -> int:
     from pii_linter.guard import run
 
@@ -484,6 +499,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print what would be written without touching any files.",
     )
     p_install.set_defaults(func=_cmd_install_hooks)
+
+    p_init = sub.add_parser(
+        "init",
+        help="Install the global git pre-commit hook. Once per machine; "
+             "after this, every `git commit` anywhere scans staged PII.",
+    )
+    p_init.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be written without touching any files or git config.",
+    )
+    p_init.set_defaults(func=_cmd_init)
+
+    p_uninstall = sub.add_parser(
+        "uninstall",
+        help="Remove the global git hook and restore core.hooksPath.",
+    )
+    p_uninstall.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be removed without touching any files.",
+    )
+    p_uninstall.set_defaults(func=_cmd_uninstall)
     return parser
 
 
@@ -491,7 +529,7 @@ def build_parser() -> argparse.ArgumentParser:
 # naming a command explicitly and it is left alone. `guard` / `install-hooks`
 # are not dataset scans, so they keep their name; `scan` is spelled out here
 # only to stay backward compatible with the documented form.
-_ALL_COMMANDS = ("scan", "guard", "install-hooks")
+_ALL_COMMANDS = ("scan", "guard", "install-hooks", "init", "uninstall")
 _ROOT_FLAGS = ("-h", "--help")
 
 
