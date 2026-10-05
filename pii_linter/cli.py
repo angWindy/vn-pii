@@ -38,6 +38,11 @@ _MAX_DEPTH = 3
 _TARGET_EXTS = TARGET_EXTS
 _MD_TABLE_LINE = re.compile(r"^\s*\|.*\|\s*$")
 
+# Bad invocation (sysexits.h EX_USAGE) is deliberately distinct from 2, which
+# means "CRITICAL PII found" in `docs/spec.md`. Sharing the code made a typo in
+# a hook config indistinguishable from a real leak in the logs.
+EX_USAGE = 64
+
 
 def _list_files(root: Path) -> Iterable[Path]:
     """Yield target files up to depth ``_MAX_DEPTH``.
@@ -307,7 +312,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         result = scan_staged(suppressions_path=args.suppressions)
     elif args.path is None:
         sys.stderr.write("Error: PATH is required unless --staged is set.\n")
-        return 2
+        return EX_USAGE
     else:
         result = scan_path(args.path, suppressions_path=args.suppressions)
     if args.format == "json":
@@ -361,7 +366,7 @@ def _cmd_install_hooks(args: argparse.Namespace) -> int:
 
     if args.user and args.project:
         sys.stderr.write("Error: --user and --project are mutually exclusive.\n")
-        return 2
+        return EX_USAGE
     scope = "project" if args.project else "user"
     return install_hooks.install(
         agents=agents,
@@ -374,11 +379,34 @@ def _cmd_install_hooks(args: argparse.Namespace) -> int:
 def _cmd_guard(args: argparse.Namespace) -> int:
     from pii_linter.guard import run
 
+    if not [c for c in args.cmd if c != "--"]:
+        sys.stderr.write("Error: guard requires a command to run.\n")
+        return EX_USAGE
+    # `guard.run` normalises the `--` separator itself, so the documented
+    # `pa1-lint guard -- <cmd>` form and the bare form both work.
     return run(args.cmd)
 
 
+class _Parser(argparse.ArgumentParser):
+    """ArgumentParser that exits EX_USAGE instead of 2 on bad flags.
+
+    argparse's default exit code 2 collides with our convention that
+    ``2 == CRITICAL PII found`` (``docs/spec.md``), which made a typo in a
+    hook config indistinguishable from a real leak in the logs. Using this
+    as the root ``parser_class`` propagates the fix to every subparser too.
+    """
+
+    def error(self, message: str) -> None:  # type: ignore[override]
+        sys.stderr.write(f"Error: {message}\n")
+        sys.stderr.write(
+            f"Run 'pa1-lint --help' for usage. (exit {EX_USAGE} = bad usage, "
+            f"not a PII finding.)\n"
+        )
+        raise SystemExit(EX_USAGE)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="pa1-lint",
         description="Local-only PII linter for VN datasets (CSV/JSONL/Markdown).",
     )

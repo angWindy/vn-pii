@@ -127,6 +127,11 @@ and is the single source of truth.
 | 0 | Clean / success |
 | 1 | HIGH finding(s) blocked |
 | 2 | CRITICAL finding(s) blocked / guard refused |
+| 64 | Bad usage (`EX_USAGE`) - wrong flag or missing argument |
+
+Exit `64` is deliberately distinct from `2`. Shared, a typo in a hook
+config would log exactly like a real CRITICAL leak and send you chasing a
+PII incident that never happened.
 
 ## Suppressions file format (`suppressions.toml`)
 

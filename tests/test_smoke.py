@@ -185,3 +185,32 @@ def test_md_table_still_uses_column_heuristics(tmp_path: Path) -> None:
     )
     result = scan_path(md)
     assert any(f.entity == "PHONE" for f in result.findings)
+
+# ---------------------------------------------------------------------------
+# Regressions for the 2026-10-05 bug sweep.
+# ---------------------------------------------------------------------------
+
+
+def test_bad_usage_exits_ex_usage_not_critical() -> None:
+    """Bug 5: argparse errors must not masquerade as CRITICAL PII (exit 2)."""
+    from pii_linter.cli import EX_USAGE
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "scan", "--no-such-flag"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == EX_USAGE
+    assert proc.returncode != 2
+
+
+def test_critical_pii_still_exits_2(tmp_path: Path) -> None:
+    """Bug 5 regression guard: exit 2 still means CRITICAL, not usage."""
+    csv = tmp_path / "cards.csv"
+    csv.write_text("pan\n4111111111111111\n", encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pii_linter.cli", "scan", str(csv)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 2

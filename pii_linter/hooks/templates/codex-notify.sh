@@ -15,12 +15,18 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # Scan the staged diff. Exit code:
-#   0 = clean
-#   1 = HIGH finding
-#   2 = CRITICAL finding (also guard refusal)
-# Anything >= 1 means PII was introduced — bubble up as a notify message.
+#   0  = clean
+#   1  = HIGH finding
+#   2  = CRITICAL finding
+#   64 = bad usage (EX_USAGE) — broken config, NOT a PII finding
+# 1/2 block so we stay fail-closed; 64 is surfaced as a config error so
+# nobody chases a PII incident that never happened.
 pa1-lint scan --staged
 rc=$?
+if [ "$rc" -eq 64 ]; then
+    echo "[pa1-lint] pa1-lint was invoked incorrectly (exit 64). Fix the hook/CLI config; this is NOT a PII finding."
+    exit 64
+fi
 if [ "$rc" -ge 1 ]; then
     echo "[pa1-lint] CRITICAL/HIGH PII detected in staged diff (exit $rc). Ask Codex to redact before continuing."
     exit 2
