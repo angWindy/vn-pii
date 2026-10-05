@@ -195,8 +195,8 @@ def install(dry_run: bool = False) -> int:
 
     # Refuse rather than clobber. The realistic collision is husky, which
     # owns core.hooksPath and its own pre-commit: overwriting that breaks
-    # every commit in the user's repos. Per-repo `install-hooks pre-commit`
-    # is the documented way to combine with a hook manager.
+    # every commit in the user's repos. Per-repo pre-commit framework is
+    # the documented way to combine with a hook manager.
     #
     # Check *every* file we are about to write, not just pre-commit. A
     # foreign `commit-msg` sitting in the hooks dir would otherwise be
@@ -213,7 +213,8 @@ def install(dry_run: bool = False) -> int:
             f"{listed}\n"
             f"That directory owns your git hooks (husky does this). Installing "
             f"would replace them and `uninstall` would then delete them.\n"
-            f"Run `{MARKER} install-hooks pre-commit --project` per repo instead, "
+            f"Per repo, merge examples/pre-commit-config.yaml into your "
+            f".pre-commit-config.yaml and run `pre-commit install` instead, "
             f"or move the other hook manager's directory first.",
             file=sys.stderr,
         )

@@ -96,11 +96,14 @@ pa1-lint init                                          # install the global hook
 |---|---|
 | `pa1-lint init` | install the global hook (idempotent; `--dry-run` to preview) |
 | `pa1-lint uninstall` | remove it and restore your git config |
-| `pa1-lint install-hooks pre-commit --project` | per-repo instead, if you use husky or another hook manager |
+| `pre-commit install` | per-repo instead, if you use husky or another hook manager |
 
 If `init` refuses because another tool (husky) already owns your hooks
-directory, use the per-repo form. That composes with the pre-commit
-framework instead of competing for `core.hooksPath`.
+directory, use the pre-commit framework per repo instead: merge
+`examples/pre-commit-config.yaml` into your `.pre-commit-config.yaml` and
+run `pre-commit install`. That composes with your existing hooks instead
+of competing for `core.hooksPath`. Full steps in
+[docs/user-guide.md](docs/user-guide.md#if-you-use-husky-or-another-hook-manager).
 
 To wrap an AI agent command:
 

@@ -20,8 +20,9 @@ hook. There is no second step and nothing to do per repo.
 Verify:
 
 ```bash
-pa1-lint --version          # 0.1.0
-git config --get core.hooksPath    # -> ~/.githooks
+python -c "import pii_linter; print(pii_linter.__version__)"   # -> 0.1.0
+git config --get core.hooksPath                               # -> ~/.githooks
+pa1-lint init --dry-run                                       # what it would write
 ```
 
 ### Doing it in two steps
@@ -109,6 +110,22 @@ pa1-lint path/to/dataset --suppressions suppressions.toml
 - Never suppress real customer data. If you find yourself needing to,
   the right fix is to remove the data, not silence the scanner.
 
+### They do not apply to the git hook
+
+`column_pattern` is matched against a CSV **header**, and the hook scans a
+staged *diff* — added lines only, with no column context. So a
+suppression will usually not match there even though it works for a
+whole-file scan. Verify a suppression before you rely on it:
+
+```bash
+pa1-lint scan path/to/dataset --suppressions suppressions.toml  # expect 0 findings
+```
+
+If you need the hook itself to respect a suppression, the pragmatic
+options are to stop putting that value in version control, or to accept
+the blocked commit and re-run with `git commit --no-verify` after
+confirming the data is genuinely synthetic.
+
 ## The git hook (zero-config)
 
 `pa1-lint init` installs one hook that covers **every** repo on the machine.
@@ -142,7 +159,7 @@ pa1-lint uninstall
 `pre-commit` it did not write, because overwriting husky's hook would break
 every commit in your repos. Use the pre-commit framework per repo instead:
 
-1. Merge [`examples/pre-commit-config.yaml`](examples/pre-commit-config.yaml)
+1. Merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml)
    into your repo's `.pre-commit-config.yaml` — it only adds a `repos:`
    entry, so keep any prettier/ruff/eslint hooks you already have.
 2. `pip install pre-commit && pre-commit install`.
@@ -150,9 +167,6 @@ every commit in your repos. Use the pre-commit framework per repo instead:
 No `pa1-lint` on your `PATH` is required: the hook entry is
 `python -m pii_linter`, and `language: python` has pre-commit build a
 dedicated environment for it.
-
-If you want to scan everything (not just staged files), call
-`pa1-lint scan <path>` directly.
 
 ### What a blocked commit looks like
 
@@ -162,25 +176,27 @@ $ git commit -m "Add new leads"
 
 # PA1 PII scan report
 
-- files_scanned: 1
-- total_findings: 1
-- severity_counts: LOW=0, MEDIUM=0, HIGH=1, CRITICAL=0
+- files_scanned: 2
+- total_findings: 2
+- severity_counts: LOW=0, MEDIUM=1, HIGH=1, CRITICAL=0
 - mode: staged-diff
 
 ## leads.csv
 
 | location | entity | severity | evidence_masked |
 |---|---|---|---|
-| leads.csv:51 | PHONE | 3 | `planted,***,foo@bar.com` |
+| leads.csv:2 | PHONE | 3 | `Nam,***,***` |
+| leads.csv:2 | EMAIL | 2 | `Nam,***,***` |
 
-> **Suggestions:** Replace with dummy_<n> or redact to ***.
+> **Suggestions:** Replace with dummy_<n> or redact to ***. Replace with dummy@example.com or redact local-part.
 ```
 
 The commit does not happen. Fix the line, re-stage (`git add leads.csv`),
 and commit again.
 
-If you want to scan everything (not just staged files), call
-`pa1-lint scan <path>` directly.
+Note that `evidence_masked` masks the whole cell, so the neighbouring
+columns are hidden too — the report never leaks the rest of the row just
+to show you one value.
 
 ## Wrap an AI agent
 
@@ -271,8 +287,24 @@ That is the whole setup. Do **not** copy
 eslint hook you already had. If you use the pre-commit framework, merge the
 `repos:` entry in by hand instead.
 
-Optional: a per-project `suppressions.toml` in the repo root. The hook
-picks it up automatically.
+A per-project `suppressions.toml` is **not** read by the hook. To use it,
+pass it explicitly — the hook runs a fixed command with no arguments:
+
+```bash
+pa1-lint scan --staged --suppressions suppressions.toml   # manual run
+```
+
+This is a real limitation, not an oversight. In staged-diff mode the
+scanner sees added *lines*, not CSV cells, so it has no column name to
+match `column_pattern` against — the header row is usually not even part
+of the commit. Suppressions that key on a column therefore only take
+effect in a whole-file scan:
+
+```bash
+pa1-lint path/to/dataset --suppressions suppressions.toml   # works
+```
+
+The suppression file itself:
 
 ```toml
 [[suppressions]]
@@ -350,7 +382,7 @@ git config --get core.hooksPath
 |---|---|---|
 | No hook at all, `core.hooksPath` empty | never ran `init` | `pa1-lint init` |
 | `pa1-lint: the PII scan did NOT run` | the interpreter baked into the hook is gone (you deleted the venv) | `pa1-lint init` to regenerate, or reinstall the package |
-| `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | use `install-hooks pre-commit --project` per repo |
+| `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
 | Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pa1-lint init` rewrites the shims |
 
 Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
@@ -378,6 +410,11 @@ detectors, same exit codes — only the input scope differs.
 
 Add a suppression entry with `column_pattern = "customer_id"` and
 `value_prefix = "id_"` to your `suppressions.toml`.
+
+Note that this only works for a whole-file scan. The `git commit` hook
+scans a staged diff and has no column to match against, so the commit
+will still be blocked — see
+[They do not apply to the git hook](#they-do-not-apply-to-the-git-hook).
 
 ### Why is the scanner printing `***` instead of real evidence?
 
