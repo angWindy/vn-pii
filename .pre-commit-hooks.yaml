@@ -5,4 +5,7 @@
   language: system
   pass_filenames: false
   stages: [pre-commit, manual]
-  types_or: [csv, jsonl, markdown]
+# No `types_or` on purpose: identify has no `jsonl` tag, and naming one makes
+# pre-commit refuse to load this config at all (every commit fails, even
+# clean ones). `scan --staged` already filters added lines down to
+# .csv/.jsonl/.md itself, so the hook self-filters per commit.

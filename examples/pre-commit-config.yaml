@@ -18,4 +18,8 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit, manual]
-        types_or: [csv, jsonl, markdown]
+        # No `types_or` here on purpose. identify has no `jsonl` tag, so
+        # listing one makes pre-commit reject this whole config with
+        # InvalidConfigError and block EVERY commit — even clean ones.
+        # `pa1-lint scan --staged` filters added lines to .csv/.jsonl/.md
+        # itself, so the hook does not need file-type gating.
