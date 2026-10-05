@@ -20,11 +20,13 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Iterable
 
 from pii_linter import Finding, ScanResult, TARGET_EXTS
 from pii_linter.detectors.column_name import score_column
+from pii_linter.detectors.content_regex import _redact_all
 from pii_linter.detectors.content_regex import scan_value as scan_content
 from pii_linter.detectors.free_text import apply_combo
 from pii_linter.detectors.luhn_card import detect_card
@@ -77,13 +79,23 @@ def _dispatch_value(
     Content regex runs once; combo boost is applied to the merged list
     (no double-scan). The NOTE-column / long-value gating is the caller's
     responsibility (it already knows whether ``hints`` contains NOTE).
+
+    Each detector only knows its own span, so a cell holding a PAN and a phone
+    produced ``CARD_NO -> ***,***`` and ``PHONE -> 4111111111111111,***``: the
+    PAN then landed in the report in the clear. Re-masking the merged span set
+    here means every finding in a value carries the same, fully redacted
+    evidence, so the reporters can never print a co-located secret.
     """
     findings: list[Finding] = []
     card = detect_card(value)
     if card is not None:
         findings.append(card)
     findings.extend(scan_content(value, hints))
-    return apply_combo(findings)
+    if len(findings) < 2:
+        return apply_combo(findings)
+    spans = [f.span for f in findings if f.span]
+    masked = _redact_all(value, spans)
+    return apply_combo([replace(f, evidence_masked=masked) for f in findings])
 
 
 def _scan_csv(
@@ -268,8 +280,6 @@ def scan_staged(cwd: str | Path | None = None, suppressions_path=None) -> ScanRe
     Each finding carries ``file`` (path) and ``line_no`` so reporters can
     render a ``file:line`` cursor.
     """
-    from dataclasses import replace
-
     root = Path(cwd) if cwd else Path.cwd()
     sups = (
         load_suppressions(suppressions_path)

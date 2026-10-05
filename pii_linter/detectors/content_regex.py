@@ -48,11 +48,29 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-def _mask_simple(value: str, start: int, end: int) -> str:
-    """Replace the (start..end) slice of ``value`` with ``***`` keeping visible context."""
-    head = value[:start]
-    tail = value[end:]
-    return f"{head}***{tail}"
+def _redact_all(value: str, spans: list[tuple[int, int]]) -> str:
+    """Mask every span in ``value``, not just the one that produced the finding.
+
+    ``AGENTS.md`` forbids printing raw evidence. A cell holding both a phone
+    and an email used to yield ``Nam,0912345678,***`` for the EMAIL finding --
+    the phone (a different entity, HIGH severity) sat in the unmasked tail and
+    went straight into the report. Redacting all detected spans closes that
+    cross-entity leak. Overlapping spans are merged so output never
+    double-masks.
+    """
+    if not spans:
+        return ""
+    # Merge overlaps, then walk right-to-left so earlier offsets stay valid.
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    out = value
+    for start, end in reversed(merged):
+        out = out[:start] + "***" + out[end:]
+    return out
 
 
 def scan_value(
@@ -64,24 +82,26 @@ def scan_value(
         return []
     hints = list(column_hints)
     hint_entities = {h.entity for h in hints}
-    out: list[Finding] = []
     cmnd_unlocked = "ID_NUMBER" in hint_entities or bool(_CMND_KEYWORDS.search(value))
+    # Collect every match before building findings: each finding's mask must
+    # hide the *other* entities in the same value too, not just its own span.
+    matches: list[tuple[str, str, int, int]] = []
     for pat, entity in _PATTERNS:
         # CMND (9 digits) is too noisy on its own — unlock only when the
         # column hint says so OR the value itself carries an ID keyword.
         if pat is _RE_CMND and not cmnd_unlocked:
             continue
         for m in pat.finditer(value):
-            sev = resolve_severity(entity)
-            raw = m.group(0)
-            masked = _mask_simple(value, m.start(), m.end())
-            out.append(
-                Finding(
-                    entity=entity,
-                    severity=sev,
-                    evidence_raw=raw,
-                    evidence_masked=masked,
-                    span=(m.start(), m.end()),
-                )
-            )
-    return out
+            matches.append((entity, m.group(0), m.start(), m.end()))
+    all_spans = [(s, e) for _, _, s, e in matches]
+    masked = _redact_all(value, all_spans)
+    return [
+        Finding(
+            entity=entity,
+            severity=resolve_severity(entity),
+            evidence_raw=raw,
+            evidence_masked=masked,
+            span=(start, end),
+        )
+        for entity, raw, start, end in matches
+    ]

@@ -14,10 +14,6 @@ import sys
 from pathlib import Path
 
 from pii_linter import Finding, ScanResult, TARGET_EXTS
-from pii_linter.detectors.column_name import score_column
-from pii_linter.detectors.content_regex import scan_value as scan_content_fn
-from pii_linter.detectors.free_text import apply_combo as apply_combo_fn
-from pii_linter.detectors.luhn_card import detect_card
 from pii_linter.report import render_markdown
 from pii_linter.severity import HIGH
 from pii_linter.suppressions import Suppression, is_suppressed, load_suppressions
@@ -105,18 +101,24 @@ def _scan_diff_text(
     loaded records so diff-scanned lines honour them just like the
     ``scan`` path does. Diff lines carry no column header, so
     suppressions are matched with an empty column name.
+
+    Delegates to ``cli._dispatch_value`` so a staged line and the same line
+    read from disk produce byte-identical evidence masks. Running the two
+    detectors here independently used to leak a co-located PAN into the
+    PHONE finding's evidence -- the one report a blocked commit shows.
     """
     if not text.strip():
         return []
+    # Imported here, not at module scope: `cli` imports this module lazily
+    # from `_cmd_guard`, so a top-level import would close the cycle.
+    from pii_linter.cli import _dispatch_value
+
     findings: list[Finding] = []
     for line in text.splitlines():
         if suppressions and is_suppressed("", line, suppressions):
             continue
-        card = detect_card(line)
-        if card is not None:
-            findings.append(card)
-        findings.extend(scan_content_fn(line, []))
-    return apply_combo_fn(findings)
+        findings.extend(_dispatch_value(line, []))
+    return findings
 
 
 def _fake_result(findings: list[Finding]) -> ScanResult:

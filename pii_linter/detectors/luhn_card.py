@@ -17,6 +17,16 @@ from pii_linter.severity import SEVERITY_BY_ENTITY
 # Strip spaces, dashes; standardise 16-digit PAN.
 _RE_PAN = re.compile(r"\b(?:\d[\d \-]{11,22}\d|\d{13,19})\b")
 
+# Phone / email / CCCD. Not used to *detect* anything here -- `detect_card`
+# only fires on a Luhn-valid PAN. This exists so the CARD_NO evidence mask can
+# also redact other PII that happens to share the same cell, which would
+# otherwise be printed verbatim next to the masked PAN.
+_RE_OTHER_PII = re.compile(
+    r"(?:\+84|0)\d{9}\b"
+    r"|\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+    r"|\b0\d{11}\b"
+)
+
 
 # BIN prefix -> network. Only major brands.
 _BIN_TABLE: dict[str, str] = {
@@ -59,14 +69,6 @@ def _bin_network(pan: str) -> str | None:
     return None
 
 
-def _mask_pan(pan: str) -> str:
-    """Mask all but the last 4 of the PAN."""
-    digits = "".join(c for c in pan if c.isdigit())
-    if len(digits) <= 4:
-        return "****"
-    return "****-****-****-" + digits[-4:]
-
-
 def detect_card(value: str) -> Finding | None:
     """Return a CRITICAL Finding if ``value`` looks like a real card number, else None."""
     if not value:
@@ -79,11 +81,20 @@ def detect_card(value: str) -> Finding | None:
         network = _bin_network(digits)
         if network is None:
             continue
+        # Mask the PAN *and* any other PII sharing the cell. A line like
+        # "4111111111111111,0912345678" used to report the phone verbatim in
+        # the CARD_NO evidence. `_redact_all` is imported lazily (content_regex
+        # already imports this module's package root) to avoid a cycle.
+        from pii_linter.detectors.content_regex import _redact_all
+
+        spans = [(m.start(), m.end())]
+        spans += [(o.start(), o.end()) for o in _RE_OTHER_PII.finditer(value)]
         return Finding(
             entity="CARD_NO",
             severity=SEVERITY_BY_ENTITY["CARD_NO"],
             evidence_raw=raw,
-            evidence_masked=_mask_pan(raw) + f" [{network}]",
+            # Trailing [network] is metadata, not PII, so it stays readable.
+            evidence_masked=f"{_redact_all(value, spans)} [{network}]",
             span=(m.start(), m.end()),
         )
     return None

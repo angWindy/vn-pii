@@ -151,3 +151,33 @@ def test_scan_diff_text_honours_suppressions() -> None:
     assert _scan_diff_text(line, sups) == []
     # And a non-suppressed line still gets scanned when sups are loaded.
     assert _scan_diff_text("0912345678 raw", sups)
+
+
+def test_scan_diff_text_masks_every_entity_in_the_line() -> None:
+    """The guard's report must not print a co-located PAN beside a masked phone.
+
+    `guard` used to run the card and regex detectors independently, so the
+    PHONE finding rendered `4111111111111111,***` -- a real card number in
+    clear text, in the very output shown to a user whose commit was blocked.
+    """
+    from pii_linter.guard import _scan_diff_text
+
+    findings = _scan_diff_text("4111111111111111,0912345678")
+    assert {f.entity for f in findings} >= {"CARD_NO", "PHONE"}
+    for f in findings:
+        assert "4111111111111111" not in f.evidence_masked
+        assert "0912345678" not in f.evidence_masked
+
+
+def test_guard_report_contains_no_raw_pii(tmp_path, monkeypatch, capsys) -> None:
+    """End-to-end: the blocked-commit report carries no unredacted PII."""
+    repo = _init_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    (repo / "cards.csv").write_text(
+        "pan,phone\n4111111111111111,0912345678\n", encoding="utf-8"
+    )
+    subprocess.run(["git", "add", "-A"], cwd=str(repo), check=True)
+    assert guard_run(["echo", "should-not-run"]) == 2
+    err = capsys.readouterr().err
+    assert "4111111111111111" not in err
+    assert "0912345678" not in err
