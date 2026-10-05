@@ -68,3 +68,44 @@ def test_guard_dashdash_separator_is_stripped(tmp_path, monkeypatch) -> None:
     assert rc == 0
     rc = guard_run(["echo", "ok"])
     assert rc == 0
+
+
+def test_guard_blocks_post_commit_introduced_pii(tmp_path, monkeypatch) -> None:
+    """Bug 4: post-scan must catch PII the wrapped command committed.
+
+    Before the fix, post-scan ran `git diff HEAD` — after the inner
+    command committed, staged content became part of HEAD, the diff
+    came back empty, and PII the agent just committed slipped through.
+    """
+    repo = _init_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    script = tmp_path / "plant.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf 'sdt,email\\n0912345678,real.person@example.com\\n' > leak.csv\n"
+        "git add leak.csv\n"
+        "git -c user.name=t -c user.email=t@t.test commit -q -m 'agent leak'\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    rc = guard_run([str(script)])
+    assert rc == 2, "post-scan must catch PII the wrapped command committed"
+
+
+def test_guard_post_scan_passes_when_nothing_new_is_introduced(
+    tmp_path, monkeypatch
+) -> None:
+    """Bug 4 negative: when the inner command only commits benign content, exit 0."""
+    repo = _init_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    script = tmp_path / "plant_safe.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf 'col\\nbenign\\n' > safe.csv\n"
+        "git add safe.csv\n"
+        "git -c user.name=t -c user.email=t@t.test commit -q -m 'safe'\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    rc = guard_run([str(script)])
+    assert rc == 0

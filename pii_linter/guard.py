@@ -22,16 +22,14 @@ from pii_linter.report import render_markdown
 from pii_linter.severity import HIGH
 
 
-def _git_diff_text(cwd: Path) -> str:
-    """Return text introduced by working-tree + staged changes (lines starting with '+')."""
-    if not (cwd / ".git").exists():
-        return ""
+def _diff_added_lines(cwd: Path, refs: list[str]) -> str:
+    """Return lines added by ``git diff <refs...>`` ('+' lines, marker stripped)."""
     exe = shutil.which("git")
     if exe is None:
         return ""
     try:
         out = subprocess.run(
-            [exe, "diff", "HEAD", "--unified=0", "--no-renames"],
+            [exe, "diff", *refs, "--unified=0", "--no-renames"],
             cwd=str(cwd),
             capture_output=True,
             text=True,
@@ -44,6 +42,31 @@ def _git_diff_text(cwd: Path) -> str:
         if line.startswith("+") and not line.startswith("+++"):
             added.append(line[1:])
     return "\n".join(added)
+
+
+def _git_diff_text(cwd: Path) -> str:
+    """Return text introduced by working-tree + staged changes (lines starting with '+')."""
+    if not (cwd / ".git").exists():
+        return ""
+    return _diff_added_lines(cwd, ["HEAD"])
+
+
+def _head_sha(cwd: Path) -> str:
+    """Return the current HEAD commit sha, or '' when there is none."""
+    exe = shutil.which("git")
+    if exe is None:
+        return ""
+    try:
+        out = subprocess.run(
+            [exe, "rev-parse", "HEAD"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out.stdout.strip()
 
 
 def _has_high_plus(findings: list[Finding]) -> bool:
@@ -98,11 +121,23 @@ def run(cmd: list[str]) -> int:
         sys.stderr.write(render_markdown(_fake_result(pre_findings)))
         return 2
 
+    # Anchor the post-scan to the HEAD that existed *before* the command ran.
+    # Scoping it to live HEAD instead would go blind whenever the command
+    # commits: the staged content becomes part of HEAD, `git diff HEAD` comes
+    # back empty, and PII the agent just committed sails through unchecked.
+    pre_head = _head_sha(cwd)
+
     proc = subprocess.run(cmd, cwd=str(cwd))
     if proc.returncode != 0:
         return proc.returncode
 
-    post_text = _git_diff_text(cwd)
+    post_head = _head_sha(cwd)
+    if pre_head and post_head and post_head != pre_head:
+        # The command created commits - diff old HEAD..new HEAD so the
+        # committed content is actually inspected.
+        post_text = _diff_added_lines(cwd, [pre_head, post_head])
+    else:
+        post_text = _git_diff_text(cwd)
     post_findings = _scan_diff_text(post_text)
     pre_masks = {f.evidence_raw for f in pre_findings}
     new = [f for f in post_findings if f.evidence_raw not in pre_masks]
