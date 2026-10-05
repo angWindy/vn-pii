@@ -126,3 +126,62 @@ def test_cli_scan_staged_exit_code_1(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "leads.csv" in proc.stdout
     assert "PHONE" in proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# Regressions for the 2026-10-05 bug sweep.
+# ---------------------------------------------------------------------------
+
+
+def test_md_prose_is_scanned_not_just_tables(tmp_path: Path) -> None:
+    """Bug 1: PII in Markdown prose (outside any table) must be flagged.
+
+    Before the fix, `_scan_md` skipped every line that was not a table
+    row, so `scan notes.md` reported 0 findings for a file that
+    `scan --staged` and `guard` both flagged. Same file, three answers.
+    """
+    notes = tmp_path / "notes.md"
+    notes.write_text(
+        "# Contact notes\n"
+        "\n"
+        "Reach out to Nguyễn Văn An at 0912345678 or an.nguyen@example.com.\n"
+        "\n"
+        "| col | col |\n"
+        "|---|---|\n"
+        "| ok | fine |\n",
+        encoding="utf-8",
+    )
+    result = scan_path(notes)
+    entities = {f.entity for f in result.findings}
+    assert "PHONE" in entities
+    assert "EMAIL" in entities
+
+
+def test_md_prose_matches_staged_path(tmp_path: Path) -> None:
+    """Bug 1: `scan <file>.md` and `scan --staged` must agree on the same content."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH; cannot exercise --staged mode")
+
+    body = "Call 0912345678 or mail real.person@example.com\n"
+    md = tmp_path / "notes.md"
+    md.write_text(f"# Notes\n\n{body}", encoding="utf-8")
+    direct = {f.entity for f in scan_path(md).findings}
+
+    _make_git_repo(tmp_path, FIX_ROOT / "negative" / "aggregate_50.csv")
+    md.write_text(f"# Notes\n\n{body}", encoding="utf-8")
+    subprocess.run(["git", "add", "notes.md"], cwd=str(tmp_path), check=True)
+    staged = {f.entity for f in scan_staged(cwd=tmp_path).findings}
+
+    assert direct == staged
+    assert "PHONE" in direct
+
+
+def test_md_table_still_uses_column_heuristics(tmp_path: Path) -> None:
+    """Bug 1 must not regress the table path: cells keep col<N> hints."""
+    md = tmp_path / "table.md"
+    md.write_text(
+        "| name | phone |\n|---|---|\n| Nam | 0912345678 |\n",
+        encoding="utf-8",
+    )
+    result = scan_path(md)
+    assert any(f.entity == "PHONE" for f in result.findings)

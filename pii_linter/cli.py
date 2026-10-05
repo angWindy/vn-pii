@@ -128,9 +128,24 @@ def _scan_md(
     suppressions,
     file_findings: list[Finding],
 ) -> None:
+    """Scan a Markdown file.
+
+    Table rows keep the per-cell ``col<N>`` column heuristic. Non-table prose
+    is scanned line-by-line with no column hints — that is the same path
+    ``guard._scan_diff_text`` and ``scan --staged`` take, so a file yields
+    the same findings no matter which entry point reads it. Skipping prose
+    entirely used to make ``scan <file.md>`` silently miss PII that
+    ``scan --staged`` and ``guard`` both flagged in the very same file.
+    """
     with p.open(encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, start=1):
+            if not line.strip():
+                continue
             if not _MD_TABLE_LINE.match(line):
+                # Prose line: no column context, but still real content.
+                if is_suppressed("", line, suppressions):
+                    continue
+                file_findings.extend(_dispatch_value(line, []))
                 continue
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             for col_idx, value in enumerate(cells):

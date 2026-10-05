@@ -17,7 +17,7 @@ Provide a Vietnamese PII scanner that runs **locally with no external service de
 |---|---|
 | Entities | `PHONE`, `ID_NUMBER` (CCCD/CMND), `EMAIL`, `CARD_NO` (Luhn), `ASSET` (VIN/plate), `URL_HANDLE` (zalo.me), `NOTE` (free-text combo), `PERSON` (column hint) |
 | Detectors | `column_name`, `content_regex`, `luhn_card`, `free_text` |
-| File formats | `.csv`, `.jsonl`, `.md` (table) |
+| File formats | `.csv`, `.jsonl`, `.md` (tables and prose) |
 | CLI | `pa1-lint scan <path>`, `pa1-lint guard -- <cmd>` |
 | Output | Markdown (default) or JSON |
 | Severity | LOW / MEDIUM / HIGH / CRITICAL + exit code 0/1/2/3 |
