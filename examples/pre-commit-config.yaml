@@ -1,25 +1,38 @@
 # Example: copy this file into your repo as `.pre-commit-config.yaml`.
-# Requires that `pa1-lint` is installed in the active Python env.
+# Nothing to install: pre-commit builds a private env for this hook from
+# this project's pyproject.toml on first run (needs Python 3.11+).
 #
 # What happens on every `git commit`:
-#   1. pre-commit invokes `pa1-lint scan --staged`.
+#   1. pre-commit runs `python -m pii_linter scan --staged`.
 #   2. The tool runs `git diff --cached` and scans the added lines.
 #   3. If any HIGH+ finding is found, exit 1 or 2.
 #   4. pre-commit blocks the commit and prints the masked report.
 #   5. The user uncomments, "commit -e --reset-author" or the file is
 #      fixed and re-staged.
 repos:
-  - repo: local
+  - repo: https://github.com/angWindy/vn-pii
+    rev: main
     hooks:
       - id: pa1-lint-staged
         name: PA1 PII linter (staged diff)
         description: Scan only the lines staged in the current commit and block on HIGH+ PII.
-        entry: pa1-lint scan --staged
-        language: system
+        # `language: python` + `python -m`, not `language: system` +
+        # `pa1-lint`. Both of the obvious alternatives let a PII dataset
+        # commit clean, because pre-commit only *warns* when a hook cannot
+        # start, then skips it:
+        #   - `pa1-lint` lives in whatever env it was installed into. Install
+        #     it in a venv and commit from a shell that has not activated that
+        #     venv, and it is simply not on PATH.
+        #   - `entry: python -m ...` under `language: system` needs a `python`
+        #     binary, but Debian/Ubuntu ships `python3` and no `python`.
+        # `language: python` has pre-commit install this project into its own
+        # env, so the hook fires from any shell, in any venv or none.
+        entry: python -m pii_linter scan --staged
+        language: python
         pass_filenames: false
         stages: [pre-commit, manual]
         # No `types_or` here on purpose. identify has no `jsonl` tag, so
         # listing one makes pre-commit reject this whole config with
         # InvalidConfigError and block EVERY commit — even clean ones.
-        # `pa1-lint scan --staged` filters added lines to .csv/.jsonl/.md
+        # `scan --staged` filters added lines to .csv/.jsonl/.md
         # itself, so the hook does not need file-type gating.

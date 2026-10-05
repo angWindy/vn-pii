@@ -12,6 +12,8 @@ Slice 2 made the tool work in any Python 3.11+ environment with a single
 
 ### End user (your own project)
 
+On macOS, Windows, or inside a virtualenv/conda env:
+
 ```bash
 pip install git+https://github.com/angWindy/vn-pii
 ```
@@ -25,6 +27,32 @@ Verify:
 pa1-lint --version          # 0.1.0
 pa1-lint --help
 ```
+
+### On Debian/Ubuntu system Python: use a venv
+
+Ubuntu marks its system Python as *externally managed* (PEP 668), so `pip`
+refuses to install anything into it and you get:
+
+```
+error: externally-managed-environment
+```
+
+This is the OS protecting itself, not a problem with the tool. Use a
+virtualenv (recommended), `pipx`, or `--break-system-packages`:
+
+```bash
+# Recommended: a per-project virtualenv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install git+https://github.com/angWindy/vn-pii
+
+# Or pipx, which manages its own environment
+pipx install git+https://github.com/angWindy/vn-pii
+```
+
+The pre-commit hook below uses `python -m pii_linter` rather than the
+`pa1-lint` script, so it keeps working from any shell — you do **not** need
+to activate the venv before every `git commit`.
 
 ### Contributor (this repo)
 
