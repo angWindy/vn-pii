@@ -12,9 +12,11 @@ Slice 2 made the tool work in any Python 3.11+ environment with a single
 
 ### End user (your own project)
 
-On macOS, Windows, or inside a virtualenv/conda env:
+Install into **any** Python 3.11+ environment you already use — a conda env,
+a virtualenv, or on macOS/Windows the plain system Python:
 
 ```bash
+conda activate pa1            # or: source .venv/bin/activate
 pip install git+https://github.com/angWindy/vn-pii
 ```
 
@@ -28,31 +30,22 @@ pa1-lint --version          # 0.1.0
 pa1-lint --help
 ```
 
-### On Debian/Ubuntu system Python: use a venv
+### If you hit `error: externally-managed-environment`
 
-Ubuntu marks its system Python as *externally managed* (PEP 668), so `pip`
-refuses to install anything into it and you get:
-
-```
-error: externally-managed-environment
-```
-
-This is the OS protecting itself, not a problem with the tool. Use a
-virtualenv (recommended), `pipx`, or `--break-system-packages`:
+That error comes from Debian/Ubuntu marking the **system** Python as
+externally managed (PEP 668). It is the OS protecting itself; nothing is
+wrong with this tool. It applies only to the bare system interpreter, so any
+of these is enough — no `--break-system-packages`:
 
 ```bash
-# Recommended: a per-project virtualenv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install git+https://github.com/angWindy/vn-pii
-
-# Or pipx, which manages its own environment
+conda activate pa1                       # a conda env
+python3 -m venv .venv && source .venv/bin/activate
 pipx install git+https://github.com/angWindy/vn-pii
 ```
 
-The pre-commit hook below uses `python -m pii_linter` rather than the
-`pa1-lint` script, so it keeps working from any shell — you do **not** need
-to activate the venv before every `git commit`.
+The pre-commit hook below runs `python -m pii_linter`, not the `pa1-lint`
+script, so it keeps working from any shell — you do **not** need to activate
+an environment before every `git commit`.
 
 ### Contributor (this repo)
 
@@ -237,11 +230,13 @@ every CSV / JSONL commit scanned:
 
 ```bash
 # 1. One-time setup in Customer-Analytics/
-pip install git+https://github.com/angWindy/vn-pii
+conda activate pa1            # any env; on Debian/Ubuntu system Python use a venv
+pip install pre-commit
 curl -O https://raw.githubusercontent.com/angWindy/vn-pii/main/examples/pre-commit-config.yaml
 mv pre-commit-config.yaml .pre-commit-config.yaml
-pip install pre-commit
 pre-commit install
+# No separate `pip install git+...` needed: the config uses `language: python`,
+# so pre-commit builds the tool into its own env on first run.
 
 # 2. Add a per-project suppressions.toml
 cat > suppressions.toml <<'EOF'
@@ -259,6 +254,20 @@ git commit -m "Add Q4 customer dataset"   # blocked if HIGH+ findings
 ```
 
 ## Troubleshooting
+
+### `error: externally-managed-environment`
+
+Ubuntu/Debian mark the **system** Python as externally managed (PEP 668), so
+`pip` refuses to install into it. Nothing is wrong with this tool — install
+into an environment you own:
+
+```bash
+conda activate pa1
+# or: python3 -m venv .venv && source .venv/bin/activate
+pip install git+https://github.com/angWindy/vn-pii
+```
+
+Avoid `--break-system-packages`; it can break `apt` and the OS Python.
 
 ### `pa1-lint: command not found`
 
