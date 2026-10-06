@@ -290,28 +290,150 @@ def test_init_sets_hooks_path_and_writes_hook(isolated_git_env) -> None:
     assert install_git.current_hooks_path() == str(isolated_git_env / ".githooks")
 
 
-def test_init_hook_uses_absolute_interpreter_not_bare_pa1(isolated_git_env) -> None:
-    """A hook that needs PATH is a hook that silently approves everything."""
+def test_init_hook_uses_resolver_not_hard_pinned_python(isolated_git_env) -> None:
+    """Hook must call the resolver script, NOT a hard-pinned Python.
+
+    A hard-pinned path silently breaks when the user reinstalls pa1-lint
+    into a different conda env. The resolver locates a working Python at
+    hook-time so the hook survives env switches.
+    """
     install_git.install()
     body = (isolated_git_env / ".githooks" / "pre-commit").read_text()
-    py = str(Path(sys.executable).resolve())
-    # Pinned to an absolute interpreter, invoked via the $PY variable.
-    assert f'PY="{py}"' in body
-    assert '"$PY" -m pii_linter scan --staged' in body
-    # No bare `pa1-lint` or bare `python` call, either of which is a PATH dep.
+    resolver = str(isolated_git_env / ".githooks" / "pa1-lint-resolver.sh")
+    # Hook must reference the resolver by absolute path, not sys.executable.
+    assert f'RESOLVER="{resolver}"' in body
+    assert '"$RESOLVER" -m pii_linter scan --staged' in body
+    # No hard-pinned $PY, no bare `pa1-lint` or `python -m` call — both
+    # are PATH/explicit-Python deps that the resolver exists to remove.
+    assert "$PY" not in body
     assert "pa1-lint scan" not in body
     assert "\npa1-lint" not in body
     assert 'python -m' not in body
 
 
-def test_init_hook_fails_closed_when_interpreter_missing(
+def test_init_writes_resolver_script(isolated_git_env) -> None:
+    """The resolver script is a sibling file the hook calls."""
+    install_git.install()
+    resolver = isolated_git_env / ".githooks" / "pa1-lint-resolver.sh"
+    assert resolver.exists()
+    assert resolver.stat().st_mode & stat.S_IXUSR
+    body = resolver.read_text()
+    # The resolver probes candidates — confirm the key probes are there.
+    assert "import pii_linter" in body
+    assert "python3" in body
+    assert 'cand_conda pa1' in body or 'cand_conda "$1"' in body
+
+
+def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
+    """Resolver at the env level: a Python with pii_linter installed wins.
+
+    Build a fake conda env with a real Python that can `import pii_linter`
+    (we use this repo's pa1 env which has it installed editable). Run the
+    resolver with a probe-only arg (-c, -V) and check exit 0.
+    """
+    # Use a tiny probe script that just runs successfully; the resolver
+    # does not care about scan args, it just locates a Python.
+    # We can't `import pii_linter` in tmp_path; instead we run the
+    # resolver against a known-good interpreter from this test process.
+    pa1_py = "/home/tts/miniconda3/envs/pa1/bin/python3.11"
+    if not Path(pa1_py).exists():
+        pytest.skip(f"test env not present: {pa1_py}")
+    # Drop a fake "$HOME/miniconda3/envs/pa1/bin/python3.11" first so the
+    # resolver's conda-env step wins without needing PATH.
+    import os
+    real_home = os.environ["HOME"]
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    fake_mini = fake_home / "miniconda3" / "envs" / "pa1" / "bin"
+    fake_mini.mkdir(parents=True)
+    # Symlink the real interpreter in — the resolver probes by exec'ing
+    # `python -c "import pii_linter"`, so the *real* env's package state
+    # is what gets loaded.
+    (fake_mini / "python3.11").symlink_to(pa1_py)
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("CONDA_PREFIX", None)  # don't let the active env shortcut
+    proc = subprocess.run(
+        [str(fake_mini / "python3.11"), "-c", "import pii_linter; print('ok')"],
+        capture_output=True, text=True, env=env,
+    )
+    if proc.returncode != 0:
+        pytest.skip(f"real interpreter cannot import pii_linter: {proc.stderr}")
+    # Sanity check: confirm the probe via the symlink works.
+    # Now run the resolver — it should pick this up via the conda env step.
+    resolver = fake_home / "miniconda3"  # unused location for resolver
+    # We invoke the resolver directly to test its logic.
+    resolver_script = fake_home / "resolver.sh"
+    import shutil as _shutil
+    _shutil.copy(
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        resolver_script,
+    )
+    resolver_script.chmod(0o755)
+    proc = subprocess.run(
+        [str(resolver_script), "-c", "import pii_linter; print('resolver-pick')"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "resolver-pick" in proc.stdout
+    # Cleanup not needed; tmp_path is ephemeral.
+
+
+def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
+    """No candidate interpreter has pii_linter -> resolver exits 1.
+
+    We simulate this by replacing the probe with a stub Python that
+    always fails the import. The resolver's exit code (1) and the
+    actionable stderr message are what matters.
+    """
+    bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
+    assert bash, "bash required for resolver test"
+    fake_home = tmp_path / "empty_home"
+    fake_home.mkdir()
+    fake_mini = fake_home / "miniconda3" / "envs"
+    fake_mini.mkdir(parents=True)
+    # Each well-known conda env gets a stub Python that always fails the
+    # `import pii_linter` probe — exactly what happens when the env is
+    # there but pa1-lint is not installed into it.
+    for env_name in ("pa1", "test"):
+        env_bin = fake_mini / env_name / "bin"
+        env_bin.mkdir(parents=True)
+        stub = env_bin / "python3.11"
+        stub.write_text(
+            "#!/bin/sh\n"
+            "exit 1\n"  # probe() -> `python -c "import ..."` exits 1
+        )
+        stub.chmod(0o755)
+    # No .venv, no CONDA_PREFIX, no PATH python3 (PATH is empty).
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env["PATH"] = "/nonexistent"
+    env.pop("CONDA_PREFIX", None)
+    resolver = fake_home / "resolver.sh"
+    import shutil as _shutil
+    _shutil.copy(
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        resolver,
+    )
+    resolver.chmod(0o755)
+    proc = subprocess.run(
+        [bash, str(resolver), "-c", "import pii_linter"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 1
+    assert "no Python interpreter" in proc.stderr
+
+
+def test_init_hook_fails_closed_when_resolver_missing(
     isolated_git_env, monkeypatch
 ) -> None:
-    """If the interpreter vanishes the hook must block, not skip the scan."""
+    """If the resolver vanishes the hook must not silently approve."""
+    # precommit_body default placeholder is __PA1_RESOLVER_PATH__; replace
+    # it with a path that definitely does not exist on disk.
     body = install_git.precommit_body().replace(
-        str(Path(sys.executable).resolve()), "/nonexistent/python"
+        "__PA1_RESOLVER_PATH__", "/nonexistent/pa1-lint-resolver.sh"
     )
-    assert '[ ! -x "$PY" ]' in body
+    assert '[ ! -x "$RESOLVER" ]' in body
     assert "exit 1" in body
     assert "did NOT run" in body
 
@@ -447,8 +569,15 @@ def test_hook_passthrough_actually_runs_repo_commit_msg(tmp_path) -> None:
     env["GIT_CONFIG_GLOBAL"] = str(cfg)
     env["GIT_CONFIG_NOSYSTEM"] = "1"
 
-    # Write the shims the way install() does.
-    (hooks / "pre-commit").write_text(install_git.precommit_body())
+    # Write the shims the way install() does. The pre-commit needs the
+    # resolver script present so it does not fail closed on resolver-missing.
+    (hooks / "pa1-lint-resolver.sh").write_text(
+        install_git._read_template("pa1-lint-resolver.sh")
+    )
+    (hooks / "pa1-lint-resolver.sh").chmod(0o755)
+    (hooks / "pre-commit").write_text(
+        install_git.precommit_body(str(hooks / "pa1-lint-resolver.sh"))
+    )
     (hooks / "pre-commit").chmod(0o755)
     for name in install_git.PASSTHROUGH_HOOKS:
         p = hooks / name

@@ -428,7 +428,8 @@ git config --get core.hooksPath
 | Symptom | Cause | Fix |
 |---|---|---|
 | No hook at all, `core.hooksPath` empty | never ran `init` | `pa1-lint init` |
-| `pa1-lint: the PII scan did NOT run` | the interpreter baked into the hook is gone (you deleted the venv) | `pa1-lint init` to regenerate, or reinstall the package |
+| `pa1-lint: resolver missing ... the PII scan did NOT run` | the resolver script got deleted; the hook can't run without it | `pa1-lint init` to regenerate |
+| `pa1-lint: no Python interpreter with pa1_linter installed was found` | resolver ran but no conda env / venv / PATH python has pa1-lint installed (e.g. you deleted the only env that had it) | install pa1-lint into any env, then commit again; bypass once with `git commit --no-verify` |
 | `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
 | Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pa1-lint init` rewrites the shims |
 
