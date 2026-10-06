@@ -11,6 +11,9 @@ is implementation detail and may change.
 - **Python:** `>= 3.11` (stdlib `tomllib` is required for `suppressions.toml`)
 - **Runtime dependencies:** `[]` (zero)
 - **Install:** `pip install git+https://github.com/angWindy/vn-pii`
+- **Upgrade:** `pip install --upgrade git+https://github.com/angWindy/vn-pii`
+  (or `pipx upgrade pii-linter` for the pipx install). Then run
+  `pii-lint install-hooks all` to refresh agent hook configs.
 - **After install:** `pii-lint <path>` works immediately. No subcommand
   required, no `PATH` setup, no config file.
 

@@ -5,7 +5,41 @@ point. One command installs it and switches on a git hook that covers every
 repository on your machine — after that, a plain `git commit` blocks PII
 with no per-repo setup.
 
+> **Heads-up on the name.** The PyPI package name is **`pii-linter`**
+> (with the trailing `-er`). The CLI binary is **`pii-lint`** (no
+> `-er`). Mixing them up is the single most common install error.
+>
+> | Type | Name | Example |
+> |---|---|---|
+> | PyPI / pip / pipx package | `pii-linter` | `pip install pii-linter` |
+> | Console-script binary | `pii-lint` | `pii-lint scan .` |
+> | Python module | `pii_linter` | `python -m pii_linter` |
+>
+> If you ever see `ERROR: No matching distribution found for pii-lint`
+> from pip, you are missing the trailing `-er`.
+
 ## Install
+
+### TL;DR — pick one
+
+```bash
+# (A) One-liner: pulls the package and runs `pii-lint init` for you.
+curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
+
+# (B) pipx, isolated CLI (recommended if you want it in your $PATH)
+pipx install git+https://github.com/angWindy/vn-pii
+pii-lint init
+
+# (C) pip into a venv / conda env you already manage
+python -m venv .venv && source .venv/bin/activate          # or: conda activate myenv
+pip install git+https://github.com/angWindy/vn-pii
+pii-lint init
+```
+
+All three end with `pii-lint init`, which sets `core.hooksPath` to
+`~/.githooks/` and writes the resolver script that locates the binary
+on every commit. After that, any `git commit` in any repo on the
+machine is scanned — no per-repo setup.
 
 ### The one command
 
@@ -70,6 +104,40 @@ pip install -e .[dev]
 The `[dev]` extra pulls `Faker` (for the synthetic fixture generator)
 and `pytest`. None of them are required at scan time.
 
+## Upgrading an existing install
+
+If you already installed a previous version, refresh it with the same
+tool you used the first time:
+
+```bash
+# pipx install (recommended)
+pipx upgrade pii-linter
+
+# pip install into the env that already has it
+pip install --upgrade pii-linter
+```
+
+The package version is a free upgrade; pipx/pip swap the wheel in place
+without touching your shell config. Then refresh the agent hook
+configs to pick up any new detector / matcher / new agent (e.g. a
+freshly released `gemini` template):
+
+```bash
+pii-lint install-hooks all    # merge mode - keeps your custom keys
+```
+
+`install-hooks` is a **deep-merge**, so your existing keys
+(`permissions`, custom `UserPromptSubmit`, model overrides, ...) are
+preserved. New keys from the new template are added. Keys that the
+template overrides are overwritten. Pass `--force-replace` only when
+you want a clean reset of the agent config file.
+
+#### Verify the upgrade
+
+```bash
+pii-lint --help                          # same 5 subcommands
+python -c "import pii_linter; print(pii_linter.__version__)"  # 0.1.0
+pii-lint install-hooks --dry-run all     # which configs it would refresh
 ## Run a one-off scan
 
 ```bash

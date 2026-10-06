@@ -19,6 +19,21 @@ commands (Cursor, Aider, Claude Code).
 > [docs/problem/PII/PII.md](docs/problem/PII/PII.md) for the original
 > problem statement.
 
+> **Heads-up on the name.** The PyPI-style package name is
+> **`pii-linter`** (with the trailing `-er`). The CLI binary is
+> **`pii-lint`** (no `-er`). So:
+>
+> ```bash
+> pip install pii-linter          # package name
+> pii-lint scan path/to/dataset   # CLI binary
+> ```
+>
+> `pip install pii-lint` (missing the `-er`) fails with
+> `No matching distribution found` because there is no package by
+> that exact name. This is the most common install mistake — see
+> [docs/user-guide.md §Install](docs/user-guide.md#install) for the
+> full instructions.
+
 ## Quick start — Use in any project
 
 ```bash
@@ -30,6 +45,42 @@ The installer picks an isolated environment for you (`pipx`, else a private
 venv) and switches on the global git hook, so this is the whole setup. See
 [one command, every repo](#quick-start--one-command-every-repo) for what that
 enables.
+
+#### Upgrading an existing install
+
+If you already installed a previous version, refresh it with the same
+tool you used the first time:
+
+```bash
+# pipx install (recommended)
+pipx upgrade pii-linter
+
+# pip install into the env that already has it
+pip install --upgrade pii-linter
+```
+
+The package version is a free upgrade; pipx/pip swap the wheel in place
+without touching your shell config. Then refresh the agent hook configs
+to pick up any new detector / matcher / new agent (e.g. a freshly
+released `gemini` template):
+
+```bash
+pii-lint install-hooks all    # merge mode - keeps your custom keys
+```
+
+`install-hooks` is a **deep-merge**, so your existing keys
+(`permissions`, custom `UserPromptSubmit`, model overrides, ...) are
+preserved. New keys from the new template are added. Keys that the
+template overrides are overwritten. Pass `--force-replace` only when
+you want a clean reset of the agent config file.
+
+#### Verify the upgrade
+
+```bash
+pii-lint --help                          # same 5 subcommands
+python -c "import pii_linter; print(pii_linter.__version__)"  # 0.1.0
+pii-lint install-hooks --dry-run all     # which configs it would refresh
+```
 
 Installing by hand works too, and is the better choice if you want the CLI in
 an environment you already manage:
