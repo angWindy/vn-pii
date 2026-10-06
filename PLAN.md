@@ -51,7 +51,6 @@ vn-pii/
 ├── fixtures/{gold,negative}/ ← synthetic data (gold is git-ignored)
 ├── Worklog/                  ← one file per session; bug fixes and decisions
 ├── docs/                     ← architecture, contributing, detectors, spec, user-guide, problem
-└── .claude/rules/            ← auto-applied rules per file type
 ```
 
 ## Slice 1 completion criteria
@@ -63,7 +62,7 @@ vn-pii/
 - [x] `pytest tests/` passes all tests
 - [x] `.pre-commit-hooks.yaml` is parseable
 - [x] Five docs files + `docs/problem/PII/PII.md` exist
-- [x] `AGENTS.md` + three `.claude/rules/` files exist
+- [x] `AGENTS.md` exists
 
 ## How to use PLAN.md
 

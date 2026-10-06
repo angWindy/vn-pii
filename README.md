@@ -174,7 +174,7 @@ for the full list and per-agent behaviour.
 | `docs/` | architecture, contributing, detectors, spec, user-guide |
 | `.pre-commit-hooks.yaml` | hook defs exposed to other repos |
 | `suppressions.toml` | example suppressions file (TOML) |
-| `AGENTS.md`, `.claude/rules/` | AI-agent onboarding (ECC) |
+| `AGENTS.md` | AI-agent onboarding (ECC) |
 
 ## Documentation
 

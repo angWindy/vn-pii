@@ -77,7 +77,6 @@ to the matching file.
 - [`docs/detectors.md`](docs/detectors.md) — regex + Luhn reference
 - [`docs/spec.md`](docs/spec.md) — public API
 - [`docs/user-guide.md`](docs/user-guide.md) — install + troubleshooting
-- [`.claude/rules/`](.claude/rules/) — auto-applied rules per file type
 
 ## 7. Hard limits (enforced by the scanner and by these rules)
 

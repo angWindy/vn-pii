@@ -19,7 +19,6 @@ flowchart TD
     INDEX --> TESTS[tests/<br/>pytest suite]
     INDEX --> FIX[fixtures/{gold,negative}/<br/>]
 
-    AGENTS --> RULES[.claude/rules/<br/>pii-guard · no-commit-gold · conda-env-pii]
     PLAN --> CURSOR[(docs/PLAN.md<br/>design decisions<br/>+ slices)]
 
     SRC --> CLI[cli.py · guard.py]

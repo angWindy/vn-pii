@@ -12,3 +12,4 @@ fixtures/gold/*.jsonl
 
 # ECC
 .claude/settings.json
+.claude/rules/
