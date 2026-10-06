@@ -318,96 +318,45 @@ def test_init_writes_resolver_script(isolated_git_env) -> None:
     assert resolver.exists()
     assert resolver.stat().st_mode & stat.S_IXUSR
     body = resolver.read_text()
-    # The resolver probes candidates — confirm the key probes are there.
+    # The resolver auto-scans — no env names should be hard-coded.
     assert "import pii_linter" in body
     assert "python3" in body
-    assert 'cand_conda pa1' in body or 'cand_conda "$1"' in body
+    assert "scan_conda_root" in body  # auto-scan helper
+    # Sanity: no per-name probe left over from the old design.
+    assert "cand_conda pa1" not in body
+    assert "cand_conda test" not in body
 
 
 def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
-    """Resolver at the env level: a Python with pii_linter installed wins.
+    """Resolver auto-discovers conda envs without hard-coded names.
 
-    Build a fake conda env with a real Python that can `import pii_linter`
-    (we use this repo's pa1 env which has it installed editable). Run the
-    resolver with a probe-only arg (-c, -V) and check exit 0.
+    We create a conda-style layout with a *non-standard* env name
+    (e.g. ``team_venv``) and verify the resolver picks it. The point
+    is to prove the resolver does not depend on the names pa1 or test;
+    it scans every env under each search root.
     """
-    # Use a tiny probe script that just runs successfully; the resolver
-    # does not care about scan args, it just locates a Python.
-    # We can't `import pii_linter` in tmp_path; instead we run the
-    # resolver against a known-good interpreter from this test process.
     pa1_py = "/home/tts/miniconda3/envs/pa1/bin/python3.11"
     if not Path(pa1_py).exists():
         pytest.skip(f"test env not present: {pa1_py}")
-    # Drop a fake "$HOME/miniconda3/envs/pa1/bin/python3.11" first so the
-    # resolver's conda-env step wins without needing PATH.
-    import os
-    real_home = os.environ["HOME"]
+    # Sanity: the candidate env must actually have pii_linter importable.
+    sanity = subprocess.run(
+        [pa1_py, "-c", "import pii_linter"],
+        capture_output=True, text=True,
+    )
+    if sanity.returncode != 0:
+        pytest.skip(f"real interpreter cannot import pii_linter: {sanity.stderr}")
+    # Build a fake $HOME/miniconda3 with a *non-standard* env name.
     fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    fake_mini = fake_home / "miniconda3" / "envs" / "pa1" / "bin"
-    fake_mini.mkdir(parents=True)
-    # Symlink the real interpreter in — the resolver probes by exec'ing
-    # `python -c "import pii_linter"`, so the *real* env's package state
-    # is what gets loaded.
-    (fake_mini / "python3.11").symlink_to(pa1_py)
-    env = os.environ.copy()
-    env["HOME"] = str(fake_home)
-    env.pop("CONDA_PREFIX", None)  # don't let the active env shortcut
-    proc = subprocess.run(
-        [str(fake_mini / "python3.11"), "-c", "import pii_linter; print('ok')"],
-        capture_output=True, text=True, env=env,
-    )
-    if proc.returncode != 0:
-        pytest.skip(f"real interpreter cannot import pii_linter: {proc.stderr}")
-    # Sanity check: confirm the probe via the symlink works.
-    # Now run the resolver — it should pick this up via the conda env step.
-    resolver = fake_home / "miniconda3"  # unused location for resolver
-    # We invoke the resolver directly to test its logic.
-    resolver_script = fake_home / "resolver.sh"
-    import shutil as _shutil
-    _shutil.copy(
-        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
-        resolver_script,
-    )
-    resolver_script.chmod(0o755)
-    proc = subprocess.run(
-        [str(resolver_script), "-c", "import pii_linter; print('resolver-pick')"],
-        capture_output=True, text=True, env=env,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert "resolver-pick" in proc.stdout
-    # Cleanup not needed; tmp_path is ephemeral.
-
-
-def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
-    """No candidate interpreter has pii_linter -> resolver exits 1.
-
-    We simulate this by replacing the probe with a stub Python that
-    always fails the import. The resolver's exit code (1) and the
-    actionable stderr message are what matters.
-    """
+    envs = fake_home / "miniconda3" / "envs" / "team_venv" / "bin"
+    envs.mkdir(parents=True)
+    (envs / "python3.11").symlink_to(pa1_py)
+    # No PATH, no CONDA_PREFIX — only the auto-scan under fake_home/miniconda3
+    # can find this. Keep bash on PATH so the resolver can launch itself.
     bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
     assert bash, "bash required for resolver test"
-    fake_home = tmp_path / "empty_home"
-    fake_home.mkdir()
-    fake_mini = fake_home / "miniconda3" / "envs"
-    fake_mini.mkdir(parents=True)
-    # Each well-known conda env gets a stub Python that always fails the
-    # `import pii_linter` probe — exactly what happens when the env is
-    # there but pa1-lint is not installed into it.
-    for env_name in ("pa1", "test"):
-        env_bin = fake_mini / env_name / "bin"
-        env_bin.mkdir(parents=True)
-        stub = env_bin / "python3.11"
-        stub.write_text(
-            "#!/bin/sh\n"
-            "exit 1\n"  # probe() -> `python -c "import ..."` exits 1
-        )
-        stub.chmod(0o755)
-    # No .venv, no CONDA_PREFIX, no PATH python3 (PATH is empty).
     env = os.environ.copy()
     env["HOME"] = str(fake_home)
-    env["PATH"] = "/nonexistent"
+    env["PATH"] = str(Path(bash).parent)  # bash's dir, nothing else
     env.pop("CONDA_PREFIX", None)
     resolver = fake_home / "resolver.sh"
     import shutil as _shutil
@@ -417,10 +366,100 @@ def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
     )
     resolver.chmod(0o755)
     proc = subprocess.run(
-        [bash, str(resolver), "-c", "import pii_linter"],
+        [str(resolver), "-c", "import pii_linter; print('resolver-pick')"],
         capture_output=True, text=True, env=env,
     )
-    assert proc.returncode == 1
+    assert proc.returncode == 0, proc.stderr
+    assert "resolver-pick" in proc.stdout
+
+
+def test_resolver_skips_broken_envs_and_picks_working_one(tmp_path) -> None:
+    """A stub Python that fails `import pii_linter` must be skipped.
+
+    When multiple envs exist, the resolver walks them in order; the
+    first one that probes successfully wins. Broken envs (env exists
+    but lib missing) must not block or crash.
+    """
+    pa1_py = "/home/tts/miniconda3/envs/pa1/bin/python3.11"
+    if not Path(pa1_py).exists():
+        pytest.skip(f"test env not present: {pa1_py}")
+    sanity = subprocess.run(
+        [pa1_py, "-c", "import pii_linter"],
+        capture_output=True, text=True,
+    )
+    if sanity.returncode != 0:
+        pytest.skip("real interpreter cannot import pii_linter")
+    fake_home = tmp_path / "home"
+    # Broken env: stub that always exits 1.
+    broken_bin = fake_home / "miniconda3" / "envs" / "broken" / "bin"
+    broken_bin.mkdir(parents=True)
+    (broken_bin / "python3.11").write_text("#!/bin/sh\nexit 1\n")
+    (broken_bin / "python3.11").chmod(0o755)
+    # Working env: symlink to real pa1 interpreter.
+    good_bin = fake_home / "miniconda3" / "envs" / "good" / "bin"
+    good_bin.mkdir(parents=True)
+    (good_bin / "python3.11").symlink_to(pa1_py)
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
+    assert bash, "bash required for resolver test"
+    env["PATH"] = str(Path(bash).parent)
+    env.pop("CONDA_PREFIX", None)
+    resolver = fake_home / "resolver.sh"
+    import shutil as _shutil
+    _shutil.copy(
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        resolver,
+    )
+    resolver.chmod(0o755)
+    proc = subprocess.run(
+        [str(resolver), "-c", "import pii_linter; print('good-pick')"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "good-pick" in proc.stdout
+
+
+def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
+    """No candidate interpreter has pii_linter -> resolver exits 1.
+
+    Each candidate is replaced with a stub Python that always fails the
+    ``import pii_linter`` probe. We also force PATH to a dir with no
+    Python at all so the system interpreter is not picked up.
+    """
+    bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
+    assert bash, "bash required for resolver test"
+    fake_home = tmp_path / "empty_home"
+    fake_home.mkdir()
+    # Provide a bare-bones bin dir on PATH that has bash but no python.
+    bare_bin = tmp_path / "bare_bin"
+    bare_bin.mkdir()
+    (bare_bin / "bash").symlink_to(bash)
+    # Stub every well-known conda root with a "no lib" Python.
+    fake_mini = fake_home / "miniconda3" / "envs"
+    fake_mini.mkdir(parents=True)
+    for env_name in ("pa1", "test"):
+        env_bin = fake_mini / env_name / "bin"
+        env_bin.mkdir(parents=True)
+        stub = env_bin / "python3.11"
+        stub.write_text("#!/bin/sh\nexit 1\n")
+        stub.chmod(0o755)
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env["PATH"] = str(bare_bin)  # bash only, no python
+    env.pop("CONDA_PREFIX", None)
+    resolver = fake_home / "resolver.sh"
+    import shutil as _shutil
+    _shutil.copy(
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        resolver,
+    )
+    resolver.chmod(0o755)
+    proc = subprocess.run(
+        [str(resolver), "-c", "import pii_linter"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "no Python interpreter" in proc.stderr
 
 

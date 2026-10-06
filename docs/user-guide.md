@@ -429,8 +429,39 @@ git config --get core.hooksPath
 |---|---|---|
 | No hook at all, `core.hooksPath` empty | never ran `init` | `pa1-lint init` |
 | `pa1-lint: resolver missing ... the PII scan did NOT run` | the resolver script got deleted; the hook can't run without it | `pa1-lint init` to regenerate |
-| `pa1-lint: no Python interpreter with pa1_linter installed was found` | resolver ran but no conda env / venv / PATH python has pa1-lint installed (e.g. you deleted the only env that had it) | install pa1-lint into any env, then commit again; bypass once with `git commit --no-verify` |
+| `pa1-lint: no Python interpreter with pa1_linter installed was found` | resolver ran but no conda/venv/PATH python has pa1-lint installed | install pa1-lint into any conda env or venv the resolver scans; or set `PA1_LINT_EXTRA_PYTHONS=/abs/path/python` to point at one; or bypass once with `git commit --no-verify` |
 | `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
+
+### How the resolver finds a Python
+
+The hook calls a sibling `pa1-lint-resolver.sh` script that probes
+candidate interpreters and picks the first one that can
+`import pii_linter`. The probe is automatic — you do not need to
+register envs in the hook.
+
+The resolver scans, in order:
+
+1. `python3` / `python` on `PATH` (often the active conda env).
+2. `$CONDA_PREFIX/bin` if a conda env is active in the calling shell.
+3. The repo's own `.venv/bin`.
+4. **Every env under each search root** (no name is hard-coded):
+   - `~/miniconda3/envs/*/bin` and `~/miniconda3/bin`
+   - `~/anaconda3/envs/*/bin` and `~/anaconda3/bin`
+   - `~/micromamba/...`, `/opt/conda/...`, `/opt/anaconda3/...`,
+     `/usr/local/anaconda3/...`
+   - `~/.local/share/mamba/envs/...`
+5. `~/.pyenv/versions/*/bin`.
+6. `~/.local/share/virtualenvs/*/bin` (pipenv) and
+   `~/.virtualenvs/*/bin` (virtualenvwrapper).
+7. `PA1_LINT_EXTRA_PYTHONS` — comma-separated absolute paths to one-off
+   interpreter locations that don't fit the conventions above.
+
+So if you `conda create -n team_lint python=3.11 && pip install pa1-pii-linter`
+into it, the next commit picks up that env without `pa1-lint init`.
+The same goes for any other env name under the search roots.
+
+To add a brand-new search root, edit `SEARCH_ROOTS` in
+`~/.githooks/pa1-lint-resolver.sh` and re-run `pa1-lint init`.
 | Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pa1-lint init` rewrites the shims |
 
 Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
