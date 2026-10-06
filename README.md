@@ -134,6 +134,33 @@ To wrap an AI agent command:
 pa1-lint guard -- aider --message "summarise repo"
 ```
 
+## Quick start — Editor & AI agent integration
+
+The global git hook fires from any `git commit` invocation, including
+the **Source Control** panel in VSCode and the **Git** panel in Cursor
+*when they shell out to the git CLI*. Pure libgit2 commit paths used
+by some IDE integrations do not run hooks — for those, prefer the
+integrated terminal or use one of the AI agent hooks below.
+
+Native AI agent hooks let the agent **stop its own tool call** when it
+detects HIGH+ PII — no user report to read, no manual redaction.
+
+```bash
+# User-wide (one command covers every project you ever work on):
+pa1-lint install-hooks all
+
+# Per-project (recommended for project-specific configs):
+cd /path/to/project
+pa1-lint install-hooks claude-code --project
+pa1-lint install-hooks codex --project
+```
+
+Supported agents: `claude-code`, `cursor`, `cody`, `codex`, `aider`.
+Claude Code uses `PreToolUse` + `PostToolUse` + `Stop`; Codex uses
+`notify` (it has no PreToolUse). See
+[docs/user-guide.md §Coding-agent hooks](docs/user-guide.md#coding-agent-hooks-claude-code-cursor-cody-codex-)
+for the full list and per-agent behaviour.
+
 ## Layout
 
 | Path | Purpose |

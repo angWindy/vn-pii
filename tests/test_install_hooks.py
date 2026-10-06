@@ -56,11 +56,17 @@ def isolated_git_env(fake_home, sandbox_gitconfig) -> Path:
 
 def test_plans_for_claude_code_user(fake_home) -> None:
     plans = install_hooks.plans_for(["claude-code"], "user")
-    assert len(plans) == 1
+    # 1 settings.json + 1 pretooluse script (PreToolUse needs JSON parsing
+    # in a real shell, not a one-liner — so we ship a sibling script).
+    assert len(plans) == 2
     p = plans[0]
     assert p.target == fake_home / ".claude" / "settings.json"
     assert p.kind == "json"
     assert p.template_name == "claude-code.json"
+    s = plans[1]
+    assert s.target == fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
+    assert s.kind == "bash_wrapper"
+    assert s.template_name == "claude-pretooluse.sh"
 
 
 def test_plans_for_cursor_user(fake_home) -> None:
@@ -95,8 +101,66 @@ def test_install_claude_code_creates_settings(fake_home) -> None:
     assert path.exists()
     payload = json.loads(path.read_text())
     assert "hooks" in payload
+    assert "PreToolUse" in payload["hooks"]
     assert "PostToolUse" in payload["hooks"]
     assert "Stop" in payload["hooks"]
+
+
+def test_install_claude_code_writes_pretooluse_script(fake_home) -> None:
+    """PreToolUse needs a sibling bash script for JSON parsing."""
+    rc = install_hooks.install(["claude-code"], "user")
+    assert rc == 0
+    script = fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
+    assert script.exists()
+    assert script.stat().st_mode & stat.S_IXUSR
+    body = script.read_text()
+    assert "__PA1_PRETOOLUSE_PATH__" not in body  # no placeholder left
+    # And the JSON must point at the script's absolute path.
+    settings = json.loads(
+        (fake_home / ".claude" / "settings.json").read_text()
+    )
+    pre = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert str(script) in pre
+    assert "__PA1_PRETOOLUSE_PATH__" not in pre
+
+
+def test_install_claude_code_pretooluse_blocks_known_bad_payload(
+    tmp_path, fake_home
+) -> None:
+    """End-to-end: feeding the script a Write call with a phone number
+    must exit 2 so Claude re-prompts. Uses a stub pa1-lint via PATH."""
+    install_hooks.install(["claude-code"], "user")
+    script = fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
+    # Drop a stub pa1-lint into a fake bin, point PATH at it.
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    stub = bindir / "pa1-lint"
+    stub.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"scan\" ]; then echo 'PHONE HIGH 0912345678'; exit 1; fi\n"
+        "exit 0\n"
+    )
+    stub.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = str(bindir) + os.pathsep + env.get("PATH", "")
+    payload = json.dumps(
+        {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": "test.csv",
+                "content": "name,phone\nA,0912345678\n",
+            },
+        }
+    )
+    proc = subprocess.run(
+        ["bash", str(script)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "PreToolUse blocked" in proc.stderr
 
 
 def test_install_merges_existing_user_prompt_submit(fake_home) -> None:

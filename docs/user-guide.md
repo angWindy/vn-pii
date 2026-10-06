@@ -237,6 +237,32 @@ This is meant to be wired into your shell alias:
 alias aider-safe="pa1-lint guard -- aider"
 ```
 
+## Editor GUI (VSCode, Cursor)
+
+The global `pre-commit` hook fires from any `git commit` invocation
+that the OS-level `git` binary handles. In practice:
+
+- **VSCode Source Control** and **Cursor Git** panels *usually* shell
+  out to the `git` binary, so the hook runs and the panel reports the
+  block. Test in your project: try a commit with a staged `.csv` that
+  contains a phone number; the panel should show the PA1 report and
+  refuse the commit.
+- **Pure libgit2 paths** (some IDE integrations and a few extensions
+  do not shell out) bypass hooks entirely. There is no portable fix
+  from the tool side — the IDE is making the commit in-process.
+
+Mitigations if the GUI bypasses the hook:
+
+1. Use the **integrated terminal** for the commit — `git commit` from
+   inside VSCode/Cursor always goes through the hook.
+2. Install the **pre-commit framework** in the repo (see
+   [If you use husky or another hook manager](#if-you-use-husky-or-another-hook-manager));
+   pre-commit's own hook is installed by the framework and fires
+   regardless of how the IDE commits.
+3. Install a **Claude Code / Cursor / Cody hook** (next section). The
+   agent hook fires on the file write itself, so it blocks even when
+   the git hook is bypassed.
+
 ## Coding-agent hooks (Claude Code, Cursor, Cody, Codex, ...)
 
 Most modern coding agents expose a **native hook system** that is a
@@ -273,9 +299,24 @@ Aider is special: it drops a `pa1-lint-aider` wrapper next to the
 `pa1-lint` binary (or in `$HOME/.local/bin` if the lookup fails), so you
 can alias `aider-safe='pa1-lint-aider'` or call it directly.
 
-Every hook calls `pa1-lint scan` and bubbles up the exit code:
-`1` (HIGH) and `2` (CRITICAL) block the tool call. The agent then
-re-prompts itself to redact.
+### What each agent actually does
+
+| Agent | Event | What runs | What it does on HIGH+ |
+|---|---|---|---|
+| Claude Code | `PreToolUse` (Write/Edit/MultiEdit) | bash script reads tool-call JSON from stdin, scans the file or new bytes | Exit 2 — Claude re-prompts itself to redact *before* the bad bytes are written |
+| Claude Code | `PostToolUse` (Write/Edit/MultiEdit) | inline `pa1-lint scan -- $file` | Exit 2 — belt-and-braces if PreToolUse is skipped |
+| Claude Code | `Stop` | `pa1-lint scan --staged` | Exit 2 — Claude must clean up before signing off |
+| Cursor | `PostToolUse` | inline `pa1-lint scan -- $file` | Exit 2 — Cursor re-prompts to redact |
+| Cody | `PostToolUse` | inline `pa1-lint scan -- $file` | Exit 2 — Cody re-prompts to redact |
+| Codex CLI | `notify` (end of every turn) | bash script scans `git diff --staged` | Exit 2 — Codex reads output back into the chat, re-prompts on next turn |
+| Aider | wrapper | `pa1-lint scan -- <paths>` over files Aider touched | Exit 2 — Aider re-prompts to redact |
+
+The Claude Code `PreToolUse` hook is the strictest: it runs *before*
+the file is written, so the agent never lands PII on disk during the
+first try. Codex has no `PreToolUse` event, so its `notify` hook is
+best-effort: the agent may write PII on the first attempt and only
+see the report after the turn ends. If you need pre-write blocking
+for Codex, wrap the agent with `pa1-lint guard -- codex ...` instead.
 
 ## Using pa1-lint in a downstream project
 

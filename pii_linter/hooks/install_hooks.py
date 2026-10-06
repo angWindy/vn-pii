@@ -77,6 +77,19 @@ def plans_for(
                     label="Claude Code",
                 )
             )
+            # PreToolUse needs a real script to do JSON parsing; ship it
+            # next to settings.json so the agent can exec it by absolute
+            # path. The sibling lookup in install() also patches the
+            # __PA1_PRETOOLUSE_PATH__ placeholder in the JSON above.
+            out.append(
+                InstallPlan(
+                    agent=a,
+                    target=base / ".claude" / "hooks" / "pa1-lint-pretooluse.sh",
+                    template_name="claude-pretooluse.sh",
+                    kind="bash_wrapper",
+                    label="Claude Code PreToolUse script",
+                )
+            )
         elif a == "cursor":
             base = proj if scope == "project" else home
             out.append(
@@ -223,6 +236,48 @@ def _merge_toml(target: Path, new_text: str) -> str:
     return new_block + "\n"
 
 
+def _patch_json_command_placeholder(
+    payload: dict, placeholder: str, plans: list[InstallPlan]
+) -> dict:
+    """Replace ``placeholder`` inside any ``command`` string with the
+    absolute path of the matching sibling ``bash_wrapper`` plan.
+
+    Claude Code nests the command under
+    ``hooks.<event>[].hooks[].command`` (4 levels), so we walk the
+    structure looking for the placeholder and substitute in place.
+    Returns the (mutated) payload for chaining.
+    """
+    if placeholder not in json.dumps(payload):
+        return payload
+    # Find sibling by template_name matching the placeholder:
+    #   __PA1_PRETOOLUSE_PATH__ -> claude-pretooluse.sh
+    #   __PA1_NOTIFY_PATH__     -> codex-notify.sh
+    target_template = {
+        "__PA1_PRETOOLUSE_PATH__": "claude-pretooluse.sh",
+        "__PA1_NOTIFY_PATH__": "codex-notify.sh",
+    }.get(placeholder)
+    sibling = next(
+        (p for p in plans if p.template_name == target_template), None
+    )
+    if sibling is None:
+        return payload
+    replacement = str(sibling.target)
+
+    def walk(node):
+        if isinstance(node, dict):
+            for k, v in list(node.items()):
+                if k == "command" and isinstance(v, str) and placeholder in v:
+                    node[k] = v.replace(placeholder, replacement)
+                else:
+                    walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(payload)
+    return payload
+
+
 def install(
     agents: list[str], scope: str, force_replace: bool = False, dry_run: bool = False
 ) -> int:
@@ -246,6 +301,14 @@ def install(
                     merged = template
                 else:
                     merged = _merge_json(plan.target, template)
+                # Patch absolute path placeholders after the merge so
+                # they point at sibling bash_wrapper plans. We walk
+                # the merged structure (Claude Code nests the command
+                # string under hooks.<event>[].hooks[].command).
+                for placeholder in ("__PA1_PRETOOLUSE_PATH__",):
+                    merged = _patch_json_command_placeholder(
+                        merged, placeholder, plans
+                    )
                 payload = json.dumps(merged, indent=2) + "\n"
                 if dry_run:
                     print(f"[dry-run] would write {plan.target} ({plan.label})")

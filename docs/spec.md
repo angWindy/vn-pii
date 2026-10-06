@@ -184,6 +184,27 @@ no suppression is applied.
 | date       | `expires_at`     | `YYYY-MM-DD` literal; parser is `date.fromisoformat` |
 | string     | `reason`         | optional; default empty |
 
+## Coding-agent hook events
+
+`pa1-lint install-hooks <agent>` writes per-agent config that fires
+`pa1-lint scan` at well-defined agent events. The exact event differs
+per agent because the agents themselves differ — there is no shared
+spec.
+
+| Agent | Event | When it runs | What it blocks |
+|---|---|---|---|
+| Claude Code | `PreToolUse` (matcher `Write\|Edit\|MultiEdit`) | Before Claude writes a file; the hook script reads the tool-call JSON from stdin and scans the new bytes | HIGH/CRITICAL PII before the file is written |
+| Claude Code | `PostToolUse` (matcher `Write\|Edit\|MultiEdit`) | After Claude writes a file | HIGH/CRITICAL PII (defence-in-depth if PreToolUse is skipped) |
+| Claude Code | `Stop` | End of every Claude turn; scans the staged diff | HIGH/CRITICAL PII staged by the turn |
+| Cursor | `PostToolUse` | After Cursor writes a file | HIGH/CRITICAL PII |
+| Cody | `PostToolUse` | After Cody writes a file | HIGH/CRITICAL PII |
+| Codex CLI | `notify` | After every Codex turn; scans the staged diff | HIGH/CRITICAL PII; agent sees report on next turn |
+
+All hooks return `pa1-lint scan` exit codes unchanged. `1` (HIGH) and
+`2` (CRITICAL) cause the agent to re-prompt; `0` is pass-through;
+`64` is bad-config and surfaces as a config error rather than a PII
+finding.
+
 ## Compatibility
 
 - The runtime dep list is empty (`pyproject.toml: dependencies = []`).
