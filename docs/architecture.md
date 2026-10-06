@@ -1,18 +1,18 @@
-# PA1 PII Linter — Architecture
+# PII Linter — Architecture
 
-PA1 is a local-only Python scanner that flags Vietnamese PII in tabular /
+PII is a local-only Python scanner that flags Vietnamese PII in tabular /
 markdown datasets before they leave the workstation. It is designed to wrap
 two workflows:
 
 1. `git commit` (via [pre-commit](../.pre-commit-hooks.yaml))
-2. AI agent commands (Cursor / Aider / Claude Code via `pa1-lint guard --`)
+2. AI agent commands (Cursor / Aider / Claude Code via `pii-lint guard --`)
 
 ## Design principles
 
 - **Local only.** No network calls. No external services. Reads files; never
   uploads.
 - **Fail-fast env check.** The CLI refuses to run if it is not inside the
-  `pa1` conda environment (`exit 3`). This avoids accidental scans from
+  `pii` conda environment (`exit 3`). This avoids accidental scans from
   the system Python.
 - **Mask before printing.** Reporters render `evidence_masked`, never
   `evidence_raw`. The raw evidence only lives in memory.
@@ -47,7 +47,7 @@ flowchart LR
 5. Reporters render `Finding`s grouped by file. Reporters never see
    `evidence_raw`.
 
-## Commit-time data flow (`pa1-lint scan --staged`)
+## Commit-time data flow (`pii-lint scan --staged`)
 
 This is the path the pre-commit framework uses. Instead of walking the
 filesystem, the CLI parses `git diff --cached --unified=0 --no-renames`
@@ -86,7 +86,7 @@ sequenceDiagram
   participant G as guard.run
   participant S as scan_path
 
-  U->>G: pa1-lint guard -- CMD
+  U->>G: pii-lint guard -- CMD
   G->>S: pre-scan git diff HEAD
   alt HIGH+ finding
     G-->>U: BLOCKED, exit 2
@@ -109,7 +109,7 @@ pii_linter
 ├── severity         (LOW/MEDIUM/HIGH/CRITICAL, SEVERITY_BY_ENTITY)
 ├── report            (mask_value, render_markdown)
 ├── suppressions     (Suppression, load_suppressions, is_suppressed)
-├── cli              (entry point pa1-lint)
+├── cli              (entry point pii-lint)
 ├── guard            (wraps subprocess with pre/post scans)
 └── detectors
     ├── column_name  (score_column)
@@ -123,7 +123,7 @@ pure and side-effect-free.
 
 ## Why a Python 3.11 floor?
 
-`pa1-lint` has **zero runtime dependencies**: `tomllib` (which parses
+`pii-lint` has **zero runtime dependencies**: `tomllib` (which parses
 `suppressions.toml`) and the rest of the loaders are part of Python
 3.11+ stdlib. The optional `[fixture]` extra (`Faker`) is only needed
 to regenerate fixtures, not to run scans.
@@ -141,4 +141,4 @@ same `Faker` + `pytest` versions when regenerating fixtures.
 - `git add` hook (Git has no `pre-add` stage; use the pre-commit hook at
   commit time instead).
 
-See [docs/problem/PA1/PA1.md](problem/PA1/PA1.md) for the original scope.
+See [docs/problem/PII/PII.md](problem/PII/PII.md) for the original scope.

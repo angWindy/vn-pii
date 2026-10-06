@@ -1,4 +1,4 @@
-"""Suppressions loader for PA1.
+"""Suppressions loader for PII.
 
 A suppression is a TOML record that says: "values matching this column
 pattern and starting with this synthetic prefix on or before ``expires_at``

@@ -1,4 +1,4 @@
-"""Luhn-validated credit card detector for PA1.
+"""Luhn-validated credit card detector for PII.
 
 A finding is emitted only when:
   1. The value (after stripping common separators) is 13–19 digits.

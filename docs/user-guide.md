@@ -1,6 +1,6 @@
 # User guide
 
-PA1 PII Linter ships as a zero-dependency Python package plus a CLI entry
+PII Linter ships as a zero-dependency Python package plus a CLI entry
 point. One command installs it and switches on a git hook that covers every
 repository on your machine — after that, a plain `git commit` blocks PII
 with no per-repo setup.
@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | s
 ```
 
 This picks a Python 3.11+ interpreter, installs the package with `pipx`
-(falling back to `pip`), and runs `pa1-lint init` to install the global git
+(falling back to `pip`), and runs `pii-lint init` to install the global git
 hook. There is no second step and nothing to do per repo.
 
 Verify:
@@ -22,7 +22,7 @@ Verify:
 ```bash
 python -c "import pii_linter; print(pii_linter.__version__)"   # -> 0.1.0
 git config --get core.hooksPath                               # -> ~/.githooks
-pa1-lint init --dry-run                                       # what it would write
+pii-lint init --dry-run                                       # what it would write
 ```
 
 ### Doing it in two steps
@@ -31,7 +31,7 @@ Identical result, if you would rather control the install:
 
 ```bash
 pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
-pa1-lint init
+pii-lint init
 ```
 
 `pip install` on its own does **not** enable the hook: pip has no
@@ -50,12 +50,12 @@ wrong with this tool. It applies only to the bare system interpreter, so any
 of these is enough — no `--break-system-packages`:
 
 ```bash
-conda activate pa1                       # a conda env
+conda activate pii                       # a conda env
 python3 -m venv .venv && source .venv/bin/activate
 pipx install git+https://github.com/angWindy/vn-pii
 ```
 
-The pre-commit hook below runs `python -m pii_linter`, not the `pa1-lint`
+The pre-commit hook below runs `python -m pii_linter`, not the `pii-lint`
 script, so it keeps working from any shell — you do **not** need to activate
 an environment before every `git commit`.
 
@@ -73,12 +73,12 @@ and `pytest`. None of them are required at scan time.
 ## Run a one-off scan
 
 ```bash
-pa1-lint path/to/dataset --format markdown
-pa1-lint path/to/dataset --format json --suppressions suppressions.toml
+pii-lint path/to/dataset --format markdown
+pii-lint path/to/dataset --format json --suppressions suppressions.toml
 ```
 
-`scan` is optional — `pa1-lint scan <path>` is accepted too, it just spells
-out the verb. Run `pa1-lint` with no path to scan the current directory.
+`scan` is optional — `pii-lint scan <path>` is accepted too, it just spells
+out the verb. Run `pii-lint` with no path to scan the current directory.
 
 JSON is easier to wire into CI dashboards. Markdown is preferred when you
 want a human-readable report.
@@ -99,7 +99,7 @@ reason = "Faker seed 42; verified by tests/test_smoke.py"
 Pass it to the scan:
 
 ```bash
-pa1-lint path/to/dataset --suppressions suppressions.toml
+pii-lint path/to/dataset --suppressions suppressions.toml
 ```
 
 ### Best practices
@@ -124,7 +124,7 @@ suppression will usually not match there even though it works for a
 whole-file scan. Verify a suppression before you rely on it:
 
 ```bash
-pa1-lint scan path/to/dataset --suppressions suppressions.toml  # expect 0 findings
+pii-lint scan path/to/dataset --suppressions suppressions.toml  # expect 0 findings
 ```
 
 If you need the hook itself to respect a suppression, the pragmatic
@@ -134,11 +134,11 @@ confirming the data is genuinely synthetic.
 
 ## The git hook (zero-config)
 
-`pa1-lint init` installs one hook that covers **every** repo on the machine.
+`pii-lint init` installs one hook that covers **every** repo on the machine.
 Run it once, after installing the package:
 
 ```bash
-pa1-lint init
+pii-lint init
 ```
 
 From now on, in any repository, every `git commit` scans the staged lines.
@@ -155,8 +155,8 @@ had keep working.
 Preview without touching anything, or remove it again:
 
 ```bash
-pa1-lint init --dry-run
-pa1-lint uninstall
+pii-lint init --dry-run
+pii-lint uninstall
 ```
 
 ### If you use husky or another hook manager
@@ -170,7 +170,7 @@ every commit in your repos. Use the pre-commit framework per repo instead:
    entry, so keep any prettier/ruff/eslint hooks you already have.
 2. `pip install pre-commit && pre-commit install`.
 
-No `pa1-lint` on your `PATH` is required: the hook entry is
+No `pii-lint` on your `PATH` is required: the hook entry is
 `python -m pii_linter`, and `language: python` has pre-commit build a
 dedicated environment for it.
 
@@ -180,7 +180,7 @@ dedicated environment for it.
 $ git add leads.csv
 $ git commit -m "Add new leads"
 
-# PA1 PII scan report
+# PII scan report
 
 - files_scanned: 2
 - total_findings: 2
@@ -206,13 +206,13 @@ to show you one value.
 
 ## Wrap an AI agent
 
-`pa1-lint guard` is designed to wrap any command that creates or edits
+`pii-lint guard` is designed to wrap any command that creates or edits
 files. The common cases are:
 
 ```bash
-pa1-lint guard -- aider --message "summarise repo"
-pa1-lint guard -- cursor ...
-pa1-lint guard -- claude -p "..."
+pii-lint guard -- aider --message "summarise repo"
+pii-lint guard -- cursor ...
+pii-lint guard -- claude -p "..."
 ```
 
 The wrapper:
@@ -234,7 +234,7 @@ the wrapped command commits, because the staged content has become part of
 This is meant to be wired into your shell alias:
 
 ```bash
-alias aider-safe="pa1-lint guard -- aider"
+alias aider-safe="pii-lint guard -- aider"
 ```
 
 ## Editor GUI (VSCode, Cursor)
@@ -245,7 +245,7 @@ that the OS-level `git` binary handles. In practice:
 - **VSCode Source Control** and **Cursor Git** panels *usually* shell
   out to the `git` binary, so the hook runs and the panel reports the
   block. Test in your project: try a commit with a staged `.csv` that
-  contains a phone number; the panel should show the PA1 report and
+  contains a phone number; the panel should show the PII report and
   refuse the commit.
 - **Pure libgit2 paths** (some IDE integrations and a few extensions
   do not shell out) bypass hooks entirely. There is no portable fix
@@ -271,7 +271,7 @@ exit and re-prompts itself to redact before continuing.
 
 There is one way to install the hook configs:
 
-### `pa1-lint install-hooks`
+### `pii-lint install-hooks`
 
 The CLI ships a subcommand that copies the bundled templates into the
 correct location for the agent you choose. It deep-merges existing
@@ -280,45 +280,45 @@ appends to TOML files (also preserving other agents' notify scripts).
 
 ```bash
 # User-wide (default — writes under $HOME):
-pa1-lint install-hooks claude-code
-pa1-lint install-hooks all
+pii-lint install-hooks claude-code
+pii-lint install-hooks all
 
 # Project-wide (writes under current git repo root):
-pa1-lint install-hooks claude-code --project
-pa1-lint install-hooks cursor     --project
+pii-lint install-hooks claude-code --project
+pii-lint install-hooks cursor     --project
 
 # Inspect first, write later:
-pa1-lint install-hooks codex --dry-run
+pii-lint install-hooks codex --dry-run
 
 # Replace existing config instead of merging:
-pa1-lint install-hooks cursor --force-replace
+pii-lint install-hooks cursor --force-replace
 ```
 
 The agent list is `claude-code | cursor | cody | codex | aider | all`.
-Aider is special: it drops a `pa1-lint-aider` wrapper next to the
-`pa1-lint` binary (or in `$HOME/.local/bin` if the lookup fails), so you
-can alias `aider-safe='pa1-lint-aider'` or call it directly.
+Aider is special: it drops a `pii-lint-aider` wrapper next to the
+`pii-lint` binary (or in `$HOME/.local/bin` if the lookup fails), so you
+can alias `aider-safe='pii-lint-aider'` or call it directly.
 
 ### What each agent actually does
 
 | Agent | Event | What runs | What it does on HIGH+ |
 |---|---|---|---|
 | Claude Code | `PreToolUse` (Write/Edit/MultiEdit) | bash script reads tool-call JSON from stdin, scans the file or new bytes | Exit 2 — Claude re-prompts itself to redact *before* the bad bytes are written |
-| Claude Code | `PostToolUse` (Write/Edit/MultiEdit) | inline `pa1-lint scan -- $file` | Exit 2 — belt-and-braces if PreToolUse is skipped |
-| Claude Code | `Stop` | `pa1-lint scan --staged` | Exit 2 — Claude must clean up before signing off |
-| Cursor | `PostToolUse` | inline `pa1-lint scan -- $file` | Exit 2 — Cursor re-prompts to redact |
-| Cody | `PostToolUse` | inline `pa1-lint scan -- $file` | Exit 2 — Cody re-prompts to redact |
+| Claude Code | `PostToolUse` (Write/Edit/MultiEdit) | inline `pii-lint scan -- $file` | Exit 2 — belt-and-braces if PreToolUse is skipped |
+| Claude Code | `Stop` | `pii-lint scan --staged` | Exit 2 — Claude must clean up before signing off |
+| Cursor | `PostToolUse` | inline `pii-lint scan -- $file` | Exit 2 — Cursor re-prompts to redact |
+| Cody | `PostToolUse` | inline `pii-lint scan -- $file` | Exit 2 — Cody re-prompts to redact |
 | Codex CLI | `notify` (end of every turn) | bash script scans `git diff --staged` | Exit 2 — Codex reads output back into the chat, re-prompts on next turn |
-| Aider | wrapper | `pa1-lint scan -- <paths>` over files Aider touched | Exit 2 — Aider re-prompts to redact |
+| Aider | wrapper | `pii-lint scan -- <paths>` over files Aider touched | Exit 2 — Aider re-prompts to redact |
 
 The Claude Code `PreToolUse` hook is the strictest: it runs *before*
 the file is written, so the agent never lands PII on disk during the
 first try. Codex has no `PreToolUse` event, so its `notify` hook is
 best-effort: the agent may write PII on the first attempt and only
 see the report after the turn ends. If you need pre-write blocking
-for Codex, wrap the agent with `pa1-lint guard -- codex ...` instead.
+for Codex, wrap the agent with `pii-lint guard -- codex ...` instead.
 
-## Using pa1-lint in a downstream project
+## Using pii-lint in a downstream project
 
 Imagine you work on `Customer-Analytics` (your own repo) and you want
 every CSV / JSONL commit scanned:
@@ -338,7 +338,7 @@ A per-project `suppressions.toml` is **not** read by the hook. To use it,
 pass it explicitly — the hook runs a fixed command with no arguments:
 
 ```bash
-pa1-lint scan --staged --suppressions suppressions.toml   # manual run
+pii-lint scan --staged --suppressions suppressions.toml   # manual run
 ```
 
 This is a real limitation, not an oversight. In staged-diff mode the
@@ -348,7 +348,7 @@ of the commit. Suppressions that key on a column therefore only take
 effect in a whole-file scan:
 
 ```bash
-pa1-lint path/to/dataset --suppressions suppressions.toml   # works
+pii-lint path/to/dataset --suppressions suppressions.toml   # works
 ```
 
 The suppression file itself:
@@ -378,26 +378,26 @@ Ubuntu/Debian mark the **system** Python as externally managed (PEP 668), so
 into an environment you own:
 
 ```bash
-conda activate pa1
+conda activate pii
 # or: python3 -m venv .venv && source .venv/bin/activate
 pip install git+https://github.com/angWindy/vn-pii
 ```
 
 Avoid `--break-system-packages`; it can break `apt` and the OS Python.
 
-### `pa1-lint: command not found`
+### `pii-lint: command not found`
 
-`pa1-lint` is the console-script entry point declared in `pyproject.toml`.
+`pii-lint` is the console-script entry point declared in `pyproject.toml`.
 It installs into whichever Python environment you ran `pip install` in.
 Check that you ran `pip install` in the env you are using:
 
 ```bash
 which python
-python -m pip show pa1-pii-linter
+python -m pip show pii-linter
 ```
 
 If you used a virtual environment, make sure it is activated before
-running `pa1-lint`.
+running `pii-lint`.
 
 If you cannot or do not want to fix `PATH`, run the module directly — it
 is the same program and returns the same exit codes:
@@ -421,20 +421,20 @@ The hook fires from the **global** install, not from a per-repo
 `.pre-commit-config.yaml`, so check these first:
 
 ```bash
-pa1-lint init --dry-run     # shows the hooks dir and core.hooksPath
+pii-lint init --dry-run     # shows the hooks dir and core.hooksPath
 git config --get core.hooksPath
 ```
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| No hook at all, `core.hooksPath` empty | never ran `init` | `pa1-lint init` |
-| `pa1-lint: resolver missing ... the PII scan did NOT run` | the resolver script got deleted; the hook can't run without it | `pa1-lint init` to regenerate |
-| `pa1-lint: no Python interpreter with pa1_linter installed was found` | resolver ran but no conda/venv/PATH python has pa1-lint installed | install pa1-lint into any conda env or venv the resolver scans; or set `PA1_LINT_EXTRA_PYTHONS=/abs/path/python` to point at one; or bypass once with `git commit --no-verify` |
-| `REFUSED: ... was not written by pa1-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
+| No hook at all, `core.hooksPath` empty | never ran `init` | `pii-lint init` |
+| `pii-lint: resolver missing ... the PII scan did NOT run` | the resolver script got deleted; the hook can't run without it | `pii-lint init` to regenerate |
+| `pii-lint: no Python interpreter with pii_linter installed was found` | resolver ran but no conda/venv/PATH python has pii-lint installed | install pii-lint into any conda env or venv the resolver scans; or set `PII_LINT_EXTRA_PYTHONS=/abs/path/python` to point at one; or bypass once with `git commit --no-verify` |
+| `REFUSED: ... was not written by pii-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
 
 ### How the resolver finds a Python
 
-The hook calls a sibling `pa1-lint-resolver.sh` script that probes
+The hook calls a sibling `pii-lint-resolver.sh` script that probes
 candidate interpreters and picks the first one that can
 `import pii_linter`. The probe is automatic — you do not need to
 register envs in the hook.
@@ -453,16 +453,16 @@ The resolver scans, in order:
 5. `~/.pyenv/versions/*/bin`.
 6. `~/.local/share/virtualenvs/*/bin` (pipenv) and
    `~/.virtualenvs/*/bin` (virtualenvwrapper).
-7. `PA1_LINT_EXTRA_PYTHONS` — comma-separated absolute paths to one-off
+7. `PII_LINT_EXTRA_PYTHONS` — comma-separated absolute paths to one-off
    interpreter locations that don't fit the conventions above.
 
-So if you `conda create -n team_lint python=3.11 && pip install pa1-pii-linter`
-into it, the next commit picks up that env without `pa1-lint init`.
+So if you `conda create -n team_lint python=3.11 && pip install pii-linter`
+into it, the next commit picks up that env without `pii-lint init`.
 The same goes for any other env name under the search roots.
 
 To add a brand-new search root, edit `SEARCH_ROOTS` in
-`~/.githooks/pa1-lint-resolver.sh` and re-run `pa1-lint init`.
-| Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pa1-lint init` rewrites the shims |
+`~/.githooks/pii-lint-resolver.sh` and re-run `pii-lint init`.
+| Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pii-lint init` rewrites the shims |
 
 Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
 fix the hook right now.
@@ -472,7 +472,7 @@ above), its own hook is configured by `.pre-commit-config.yaml` and runs
 with `language: python`, so it needs nothing on your `PATH`:
 
 ```bash
-pre-commit run pa1-lint-staged --hook-stage pre-commit   # test without committing
+pre-commit run pii-lint-staged --hook-stage pre-commit   # test without committing
 ```
 
 Note that if `core.hooksPath` is set (by `init` or by husky), the
@@ -481,8 +481,8 @@ That is expected: only the hooks directory git is pointed at runs.
 
 ### Why is the staged report different from the full report?
 
-`pa1-lint scan --staged` only scans the lines introduced by your commit.
-`pa1-lint scan path/to/dataset` reads the whole file from disk. Same
+`pii-lint scan --staged` only scans the lines introduced by your commit.
+`pii-lint scan path/to/dataset` reads the whole file from disk. Same
 detectors, same exit codes — only the input scope differs.
 
 ### False positive on `customer_id` containing `id_001`

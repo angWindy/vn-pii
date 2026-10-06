@@ -1,4 +1,4 @@
-"""Guard mode for PA1.
+"""Guard mode for PII.
 
 Runs a user-supplied command but pre/post-scans ``git diff HEAD`` so that
 the command only executes when both states are PII-clean. Designed to be
@@ -129,14 +129,14 @@ def _fake_result(findings: list[Finding]) -> ScanResult:
 def run(cmd: list[str]) -> int:
     """Pre-scan, run ``cmd``, post-scan. Return the worst exit code."""
     # `argparse.REMAINDER` swallows the conventional `--` separator
-    # (`pa1-lint guard -- aider ...`), leaving it as argv[0] and making
+    # (`pii-lint guard -- aider ...`), leaving it as argv[0] and making
     # subprocess raise FileNotFoundError. Normalise it away here so every
     # caller is safe, not just the one that went through the CLI.
     cmd = list(cmd)
     if cmd and cmd[0] == "--":
         cmd = cmd[1:]
     if not cmd:
-        sys.stderr.write("[pa1-guard] no command given; nothing to run.\n")
+        sys.stderr.write("[pii-guard] no command given; nothing to run.\n")
         return 2
 
     cwd = Path.cwd()
@@ -152,7 +152,7 @@ def run(cmd: list[str]) -> int:
 
     if not (cwd / ".git").exists():
         sys.stderr.write(
-            "[pa1-guard] not a git repo; running command without guard.\n"
+            "[pii-guard] not a git repo; running command without guard.\n"
         )
         proc = subprocess.run(cmd, cwd=str(cwd))
         return proc.returncode
@@ -161,7 +161,7 @@ def run(cmd: list[str]) -> int:
     pre_findings = _scan_diff_text(pre_text, suppressions)
     if _has_high_plus(pre_findings):
         sys.stderr.write(
-            "[pa1-guard] BLOCKED: pre-scan found HIGH+ findings. "
+            "[pii-guard] BLOCKED: pre-scan found HIGH+ findings. "
             "Refusing to run the command.\n"
         )
         sys.stderr.write(render_markdown(_fake_result(pre_findings)))
@@ -189,7 +189,7 @@ def run(cmd: list[str]) -> int:
     new = [f for f in post_findings if f.evidence_raw not in pre_masks]
     if _has_high_plus(new):
         sys.stderr.write(
-            "[pa1-guard] BLOCKED: post-scan found new HIGH+ findings "
+            "[pii-guard] BLOCKED: post-scan found new HIGH+ findings "
             "introduced by the command.\n"
         )
         sys.stderr.write(render_markdown(_fake_result(new)))

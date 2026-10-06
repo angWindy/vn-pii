@@ -1,6 +1,6 @@
 # Contributing
 
-PA1 is intentionally small. Most contributions are one of:
+PII is intentionally small. Most contributions are one of:
 
 - a new entity (`PERSON`, `PHONE`, …)
 - a new detector regex
@@ -73,7 +73,7 @@ pytest tests/ -v
 If you want to see the markdown output for a single gold file:
 
 ```bash
-pa1-lint scan fixtures/gold --suppressions suppressions.toml
+pii-lint scan fixtures/gold --suppressions suppressions.toml
 ```
 
 ## Commit checklist

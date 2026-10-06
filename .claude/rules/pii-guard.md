@@ -1,8 +1,8 @@
-# Wrap CSV / JSONL edits with `pa1-lint guard`
+# Wrap CSV / JSONL edits with `pii-lint guard`
 
 Any edit or AI-agent command that touches a `.csv`, `.jsonl`, or
 non-`negative/` Markdown file should run inside
-[`pa1-lint guard --`](../pii_linter/guard.py).
+[`pii-lint guard --`](../pii_linter/guard.py).
 
 ## Trigger
 
@@ -19,13 +19,13 @@ This rule applies whenever an AI agent is about to:
 Wrap the tool call:
 
 ```bash
-pa1-lint guard -- <edit-command-and-args>
+pii-lint guard -- <edit-command-and-args>
 ```
 
 For an interactive agent, alias it:
 
 ```bash
-alias aider-safe='pa1-lint guard -- aider'
+alias aider-safe='pii-lint guard -- aider'
 ```
 
 ## Decision tree
@@ -48,6 +48,6 @@ alias aider-safe='pa1-lint guard -- aider'
 
 ## Related
 
-- `docs/spec.md` — `pa1-lint guard` contract.
+- `docs/spec.md` — `pii-lint guard` contract.
 - `docs/user-guide.md` — wiring shell aliases.
 - `AGENTS.md` §2 — workflow rules summary.

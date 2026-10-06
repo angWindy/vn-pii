@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pa1-pii-linter"
+name = "pii-linter"
 version = "0.1.0"
 description = "Local pre-commit PII linter for VN datasets (CSV/JSONL/Markdown)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-    { name = "PA1 contributors" },
+    { name = "PII contributors" },
 ]
 keywords = ["pii", "linter", "pre-commit", "vietnamese", "csv", "jsonl"]
 classifiers = [
@@ -41,7 +41,7 @@ fixture = [
 ]
 
 [project.scripts]
-pa1-lint = "pii_linter.cli:main"
+pii-lint = "pii_linter.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pii_linter"]

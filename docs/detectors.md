@@ -1,6 +1,6 @@
 # Detectors reference
 
-PA1 has four detector modules in [`pii_linter/detectors/`](../pii_linter/detectors).
+PII has four detector modules in [`pii_linter/detectors/`](../pii_linter/detectors).
 Each is a pure function that takes a single cell value (and optional column
 hints) and returns zero or more `Finding` dataclasses.
 

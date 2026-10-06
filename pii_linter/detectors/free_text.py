@@ -1,4 +1,4 @@
-"""Free-text detector for PA1.
+"""Free-text detector for PII.
 
 Activated only for "note" columns (column hint NOTE) or values longer than
 30 characters. Runs :func:`content_regex.scan_value` then applies combo

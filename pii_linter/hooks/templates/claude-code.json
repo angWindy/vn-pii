@@ -1,9 +1,9 @@
 {
   "_comment": [
-    "PA1 PII linter hook for Claude Code.",
+    "PII linter hook for Claude Code.",
     "Install: copy this file to ~/.claude/settings.json (user-wide) or",
     "          .claude/settings.json (per-project) and merge with your existing config.",
-    "Requires: `pa1-lint` on PATH. `pip install git+https://github.com/angWindy/vn-pii`.",
+    "Requires: `pii-lint` on PATH. `pip install git+https://github.com/angWindy/vn-pii`.",
     "",
     "Behavior:",
     "  PreToolUse:  before Claude writes/edits a file, scan it. Exit 2 on",
@@ -17,7 +17,7 @@
     "Scope matcher (Write|Edit|MultiEdit) means every Write/Edit/MultiEdit",
     "tool call. Adjust if you have other tools named Write/Edit.",
     "",
-    "PreToolUse uses a separate __PA1_PRETOOLUSE_PATH__ script. The install",
+    "PreToolUse uses a separate __PII_PRETOOLUSE_PATH__ script. The install",
     "command patches that placeholder to the absolute path of the script",
     "after copying it next to settings.json (under .claude/hooks/)."
   ],
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash __PA1_PRETOOLUSE_PATH__"
+            "command": "bash __PII_PRETOOLUSE_PATH__"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'f=\"$CLAUDE_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pa1-lint scan -- \"$f\" || exit 2;; esac'"
+            "command": "bash -c 'f=\"$CLAUDE_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pa1-lint scan --staged || exit 2"
+            "command": "pii-lint scan --staged || exit 2"
           }
         ]
       }

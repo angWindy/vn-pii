@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PA1 PII linter — Claude Code PreToolUse hook.
+# PII linter — Claude Code PreToolUse hook.
 #
 # Reads the tool-call JSON from stdin (Claude injects it on stdin, NOT
 # in environment variables). Extracts the file path, scans it if it
@@ -23,14 +23,14 @@ set -u
 
 input="$(cat)"
 
-# Prefer the on-PATH pa1-lint (user-wide install), fall back to
+# Prefer the on-PATH pii-lint (user-wide install), fall back to
 # `python -m pii_linter` so this also works in venv/conda envs that
 # did not put the console script on PATH.
-pa1_lint_cmd=()
-if command -v pa1-lint >/dev/null 2>&1; then
-    pa1_lint_cmd=(pa1-lint)
+pii_lint_cmd=()
+if command -v pii-lint >/dev/null 2>&1; then
+    pii_lint_cmd=(pii-lint)
 else
-    pa1_lint_cmd=(python3 -m pii_linter)
+    pii_lint_cmd=(python3 -m pii_linter)
 fi
 
 # Pull the file path out of the JSON. All three of Write / Edit /
@@ -61,7 +61,7 @@ if [ -z "${fpath:-}" ]; then
 fi
 
 # Only scan PII-risk extensions. Everything else (Python, JS, etc.) is
-# out of documented scope; pa1-lint scan is whole-file and would be
+# out of documented scope; pii-lint scan is whole-file and would be
 # overkill on a 5000-line source file.
 case "$fpath" in
     *.csv|*.jsonl|*.md) ;;
@@ -105,11 +105,11 @@ PY
     if [ -z "${content:-}" ]; then
         exit 0
     fi
-    # Scan via tmp file. pa1-lint scan reads positional paths.
+    # Scan via tmp file. pii-lint scan reads positional paths.
     tmp="$(mktemp --suffix=.$(basename "$fpath"))"
     trap 'rm -f "$tmp"' EXIT
     printf '%s' "$content" > "$tmp"
-    "${pa1_lint_cmd[@]}" scan -- "$tmp"
+    "${pii_lint_cmd[@]}" scan -- "$tmp"
     rc=$?
     rm -f "$tmp"
     trap - EXIT
@@ -117,16 +117,16 @@ else
     # Existing file: scan directly. (PostToolUse would do this too,
     # but PreToolUse gives Claude a chance to redact without ever
     # writing the bad bytes.)
-    "${pa1_lint_cmd[@]}" scan -- "$fpath"
+    "${pii_lint_cmd[@]}" scan -- "$fpath"
     rc=$?
 fi
 
 if [ "$rc" -eq 64 ]; then
-    echo "[pa1-lint] PreToolUse: pa1-lint was invoked incorrectly (exit 64). Fix the hook/CLI config; this is NOT a PII finding." >&2
+    echo "[pii-lint] PreToolUse: pii-lint was invoked incorrectly (exit 64). Fix the hook/CLI config; this is NOT a PII finding." >&2
     exit 64
 fi
 if [ "$rc" -ge 1 ] && [ "$rc" -le 3 ]; then
-    echo "[pa1-lint] PreToolUse blocked: HIGH/CRITICAL PII detected in $fpath (exit $rc). Redact (e.g. dummy_<n>, REDACTED) before writing." >&2
+    echo "[pii-lint] PreToolUse blocked: HIGH/CRITICAL PII detected in $fpath (exit $rc). Redact (e.g. dummy_<n>, REDACTED) before writing." >&2
     exit 2
 fi
 exit 0

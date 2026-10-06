@@ -7,11 +7,11 @@
 
 ## What was done
 
-- **CLI**: added `--staged` flag to `pa1-lint scan`. New helper `_git_diff_staged()` runs `git diff --cached --unified=0 --no-renames` and parses out `(file, line_no, text)` triples. New function `scan_staged(cwd, suppressions_path)` runs the same per-value detector dispatch on each added line.
+- **CLI**: added `--staged` flag to `pii-lint scan`. New helper `_git_diff_staged()` runs `git diff --cached --unified=0 --no-renames` and parses out `(file, line_no, text)` triples. New function `scan_staged(cwd, suppressions_path)` runs the same per-value detector dispatch on each added line.
 - **Finding dataclass**: added two optional fields, `file` and `line_no`, both with safe defaults (`""` / `0`). Existing findings are untouched; only staged-mode findings carry values.
 - **Reporter**: `render_markdown()` now appends a `location` column when any finding has a `file:line` cursor, and adds `mode: staged-diff` to the report header.
 - **JSON output**: includes `file` and `line_no` in finding and per-file maps.
-- **Pre-commit hook**: `.pre-commit-hooks.yaml` and `examples/pre-commit-config.yaml` now call `pa1-lint scan --staged` with `pass_filenames: false` (the hook scans the diff, not pre-commit's filename list) and `stages: [pre-commit, manual]`.
+- **Pre-commit hook**: `.pre-commit-hooks.yaml` and `examples/pre-commit-config.yaml` now call `pii-lint scan --staged` with `pass_filenames: false` (the hook scans the diff, not pre-commit's filename list) and `stages: [pre-commit, manual]`.
 - **Tests**: 3 new smoke tests (`test_staged_scan_blocks_on_planted_phone`, `test_staged_scan_passes_on_clean`, `test_cli_scan_staged_exit_code_1`). 39/39 pass.
 
 ## Findings / decisions
@@ -24,11 +24,11 @@
 
 ## Acceptance
 
-- [x] `pa1-lint scan --staged` in a temp repo with a planted phone line exits 1 with `leads.csv:51 | PHONE | 3 | masked_evidence` in the report.
-- [x] `pa1-lint scan --staged` in a temp repo with the clean aggregate fixture exits 0.
-- [x] `pa1-lint scan --staged` in a repo with `fixtures/gold/notes_50.jsonl` exits 2 with 364 findings, mode `staged-diff`.
-- [x] `.pre-commit-hooks.yaml` and `examples/pre-commit-config.yaml` declare `pa1-lint scan --staged` with the right stages and `pass_filenames: false`.
-- [x] `docs/spec.md` lists `pa1-lint scan --staged` as part of the public API.
+- [x] `pii-lint scan --staged` in a temp repo with a planted phone line exits 1 with `leads.csv:51 | PHONE | 3 | masked_evidence` in the report.
+- [x] `pii-lint scan --staged` in a temp repo with the clean aggregate fixture exits 0.
+- [x] `pii-lint scan --staged` in a repo with `fixtures/gold/notes_50.jsonl` exits 2 with 364 findings, mode `staged-diff`.
+- [x] `.pre-commit-hooks.yaml` and `examples/pre-commit-config.yaml` declare `pii-lint scan --staged` with the right stages and `pass_filenames: false`.
+- [x] `docs/spec.md` lists `pii-lint scan --staged` as part of the public API.
 - [x] `docs/architecture.md` has a "Commit-time data flow" mermaid diagram.
 - [x] `docs/PLAN.md` has a Slice 3 row and a Slice 3 acceptance block.
 - [x] `README.md` has the top banner "Blocks your commit if HIGH+ PII is staged".

@@ -1,17 +1,17 @@
 # Public spec
 
-This is the contract of PA1 PII Linter slice 1. Anything not listed here
+This is the contract of PII Linter slice 1. Anything not listed here
 is implementation detail and may change.
 
 ## Package
 
-- **Name:** `pa1-pii-linter`
+- **Name:** `pii-linter`
 - **Version:** `0.1.0` (see `pii_linter.__version__`)
 - **License:** MIT (see `pyproject.toml`)
 - **Python:** `>= 3.11` (stdlib `tomllib` is required for `suppressions.toml`)
 - **Runtime dependencies:** `[]` (zero)
 - **Install:** `pip install git+https://github.com/angWindy/vn-pii`
-- **After install:** `pa1-lint <path>` works immediately. No subcommand
+- **After install:** `pii-lint <path>` works immediately. No subcommand
   required, no `PATH` setup, no config file.
 
 ## Public dataclasses (in `pii_linter`)
@@ -101,15 +101,15 @@ is touched.
 
 | Form | Notes |
 |---|---|
-| `pa1-lint [PATH]` | Console script. `scan` is optional. |
-| `pa1-lint scan [PATH]` | Explicit subcommand; identical behaviour. |
+| `pii-lint [PATH]` | Console script. `scan` is optional. |
+| `pii-lint scan [PATH]` | Explicit subcommand; identical behaviour. |
 | `python -m pii_linter [PATH]` | Same as the console script, no `PATH` setup needed. |
 | `from pii_linter import scan` | Library call; returns a `ScanResult`. |
 
 Omitting `PATH` scans the current directory. `guard` and `install-hooks`
 still require their subcommand — they are not dataset scans.
 
-### `pa1-lint [PATH] [--format {markdown,json}] [--suppressions PATH]`
+### `pii-lint [PATH] [--format {markdown,json}] [--suppressions PATH]`
 
 - Recursively walks `PATH` (default `.`) for `.csv`, `.jsonl`, `.md` up to depth 3.
 - Loads `suppressions.toml` from `--suppressions PATH` (default: none).
@@ -119,7 +119,7 @@ still require their subcommand — they are not dataset scans.
   - `1` — at least one HIGH finding
   - `2` — at least one CRITICAL finding
 
-#### `pa1-lint scan --staged [--suppressions PATH]`
+#### `pii-lint scan --staged [--suppressions PATH]`
 
 - Does **not** take a positional `PATH`; any `PATH` given is ignored.
 - Runs `git diff --cached --unified=0 --no-renames` and scans only the
@@ -132,7 +132,7 @@ still require their subcommand — they are not dataset scans.
   column header context). Suppressions by `value_prefix` still work.
 - The pre-commit hook in `.pre-commit-hooks.yaml` calls this subcommand.
 
-### `pa1-lint guard -- <cmd> [<args>...]`
+### `pii-lint guard -- <cmd> [<args>...]`
 
 - Reads `git diff HEAD` and scans added lines.
 - If HIGH+ findings exist, refuses to run `<cmd>` (exit `2`).
@@ -142,7 +142,7 @@ still require their subcommand — they are not dataset scans.
 - Outside a git repo: prints a warning and runs the command anyway
   (exit 0 / `<cmd>` exit).
 
-### `pa1-lint` exit codes
+### `pii-lint` exit codes
 
 | Code | Meaning |
 |---|---|
@@ -186,8 +186,8 @@ no suppression is applied.
 
 ## Coding-agent hook events
 
-`pa1-lint install-hooks <agent>` writes per-agent config that fires
-`pa1-lint scan` at well-defined agent events. The exact event differs
+`pii-lint install-hooks <agent>` writes per-agent config that fires
+`pii-lint scan` at well-defined agent events. The exact event differs
 per agent because the agents themselves differ — there is no shared
 spec.
 
@@ -200,7 +200,7 @@ spec.
 | Cody | `PostToolUse` | After Cody writes a file | HIGH/CRITICAL PII |
 | Codex CLI | `notify` | After every Codex turn; scans the staged diff | HIGH/CRITICAL PII; agent sees report on next turn |
 
-All hooks return `pa1-lint scan` exit codes unchanged. `1` (HIGH) and
+All hooks return `pii-lint scan` exit codes unchanged. `1` (HIGH) and
 `2` (CRITICAL) cause the agent to re-prompt; `0` is pass-through;
 `64` is bad-config and surfaces as a config error rather than a PII
 finding.

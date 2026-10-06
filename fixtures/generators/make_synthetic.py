@@ -1,6 +1,6 @@
-"""Generate synthetic CSV/JSONL fixtures for PA1 tests and demos.
+"""Generate synthetic CSV/JSONL fixtures for PII tests and demos.
 
-Run inside the ``pa1`` conda env:
+Run inside the ``pii`` conda env:
 
     python fixtures/generators/make_synthetic.py --out fixtures/gold fixtures/negative
 

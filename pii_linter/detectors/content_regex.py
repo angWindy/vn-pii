@@ -1,4 +1,4 @@
-"""Content-based regex detectors for PA1.
+"""Content-based regex detectors for PII.
 
 Each module-level regex is pre-compiled at import time. ``scan_value`` runs
 all patterns against a single cell value and returns a list of ``Finding``.

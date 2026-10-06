@@ -1,13 +1,13 @@
-"""PA1 PII Linter CLI entrypoint.
+"""PII Linter CLI entrypoint.
 
 Usage:
-    pa1-lint init                     # install the global git hook (one-time)
-    pa1-lint uninstall                # remove it again
-    pa1-lint [PATH]                 # same as `pa1-lint scan PATH`; bare -> cwd
-    pa1-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
-    pa1-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
-    pa1-lint guard -- <cmd>...
-    python -m pii_linter [PATH]      # identical to `pa1-lint`
+    pii-lint init                     # install the global git hook (one-time)
+    pii-lint uninstall                # remove it again
+    pii-lint [PATH]                 # same as `pii-lint scan PATH`; bare -> cwd
+    pii-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
+    pii-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
+    pii-lint guard -- <cmd>...
+    python -m pii_linter [PATH]      # identical to `pii-lint`
 
 The tool runs in any Python 3.11+ environment (no conda env check in
 Slice 2+).
@@ -53,7 +53,7 @@ EX_USAGE = 64
 def _list_files(root: Path) -> Iterable[Path]:
     """Yield target files up to depth ``_MAX_DEPTH``.
 
-    If ``root`` is a single file (e.g. ``pa1-lint scan path/to/x.csv``),
+    If ``root`` is a single file (e.g. ``pii-lint scan path/to/x.csv``),
     yield it directly so callers can scan individual fixtures.
     """
     if root.is_file():
@@ -213,7 +213,7 @@ def scan_path(root: str | Path, suppressions_path: str | Path | None = None) -> 
 
 
 # ---------------------------------------------------------------------------
-# Staged-diff scan (used by `pa1-lint scan --staged` and the pre-commit hook).
+# Staged-diff scan (used by `pii-lint scan --staged` and the pre-commit hook).
 # ---------------------------------------------------------------------------
 
 def _git_diff_staged(cwd: Path) -> list[tuple[str, int, str]]:
@@ -407,7 +407,7 @@ def _cmd_guard(args: argparse.Namespace) -> int:
         sys.stderr.write("Error: guard requires a command to run.\n")
         return EX_USAGE
     # `guard.run` normalises the `--` separator itself, so the documented
-    # `pa1-lint guard -- <cmd>` form and the bare form both work.
+    # `pii-lint guard -- <cmd>` form and the bare form both work.
     return run(args.cmd)
 
 
@@ -423,7 +423,7 @@ class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:  # type: ignore[override]
         sys.stderr.write(f"Error: {message}\n")
         sys.stderr.write(
-            f"Run 'pa1-lint --help' for usage. (exit {EX_USAGE} = bad usage, "
+            f"Run 'pii-lint --help' for usage. (exit {EX_USAGE} = bad usage, "
             f"not a PII finding.)\n"
         )
         raise SystemExit(EX_USAGE)
@@ -431,7 +431,7 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(
-        prog="pa1-lint",
+        prog="pii-lint",
         description="Local-only PII linter for VN datasets (CSV/JSONL/Markdown).",
     )
     sub = parser.add_subparsers(dest="command", required=False)
@@ -470,7 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_install = sub.add_parser(
         "install-hooks",
-        help="Install PA1 hook configs into a coding agent's config dir. "
+        help="Install PII hook configs into a coding agent's config dir. "
              "Templates are read from the installed package.",
     )
     p_install.add_argument(
@@ -534,10 +534,10 @@ _ROOT_FLAGS = ("-h", "--help")
 
 
 def _normalise_argv(argv: list[str]) -> list[str]:
-    """Allow `pa1-lint <path>` and bare `pa1-lint` to mean "scan".
+    """Allow `pii-lint <path>` and bare `pii-lint` to mean "scan".
 
-    ``pa1-lint data.csv`` is rewritten to ``scan data.csv`` and a bare
-    ``pa1-lint`` scans the current directory. Anything that already names a
+    ``pii-lint data.csv`` is rewritten to ``scan data.csv`` and a bare
+    ``pii-lint`` scans the current directory. Anything that already names a
     subcommand, or asks for root help, is passed through untouched.
     """
     if not argv:

@@ -1,4 +1,4 @@
-"""Tests for ``pa1-lint install-hooks`` and ``pa1-lint init``/``uninstall``.
+"""Tests for ``pii-lint install-hooks`` and ``pii-lint init``/``uninstall``.
 
 We exercise both install paths against a sandboxed HOME and an isolated
 ``--project`` target. The tests do NOT touch the real ``$HOME`` or the real
@@ -64,7 +64,7 @@ def test_plans_for_claude_code_user(fake_home) -> None:
     assert p.kind == "json"
     assert p.template_name == "claude-code.json"
     s = plans[1]
-    assert s.target == fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
+    assert s.target == fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
     assert s.kind == "bash_wrapper"
     assert s.template_name == "claude-pretooluse.sh"
 
@@ -110,31 +110,31 @@ def test_install_claude_code_writes_pretooluse_script(fake_home) -> None:
     """PreToolUse needs a sibling bash script for JSON parsing."""
     rc = install_hooks.install(["claude-code"], "user")
     assert rc == 0
-    script = fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
+    script = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
     assert script.exists()
     assert script.stat().st_mode & stat.S_IXUSR
     body = script.read_text()
-    assert "__PA1_PRETOOLUSE_PATH__" not in body  # no placeholder left
+    assert "__PII_PRETOOLUSE_PATH__" not in body  # no placeholder left
     # And the JSON must point at the script's absolute path.
     settings = json.loads(
         (fake_home / ".claude" / "settings.json").read_text()
     )
     pre = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     assert str(script) in pre
-    assert "__PA1_PRETOOLUSE_PATH__" not in pre
+    assert "__PII_PRETOOLUSE_PATH__" not in pre
 
 
 def test_install_claude_code_pretooluse_blocks_known_bad_payload(
     tmp_path, fake_home
 ) -> None:
     """End-to-end: feeding the script a Write call with a phone number
-    must exit 2 so Claude re-prompts. Uses a stub pa1-lint via PATH."""
+    must exit 2 so Claude re-prompts. Uses a stub pii-lint via PATH."""
     install_hooks.install(["claude-code"], "user")
-    script = fake_home / ".claude" / "hooks" / "pa1-lint-pretooluse.sh"
-    # Drop a stub pa1-lint into a fake bin, point PATH at it.
+    script = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
+    # Drop a stub pii-lint into a fake bin, point PATH at it.
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    stub = bindir / "pa1-lint"
+    stub = bindir / "pii-lint"
     stub.write_text(
         "#!/bin/sh\n"
         "if [ \"$1\" = \"scan\" ]; then echo 'PHONE HIGH 0912345678'; exit 1; fi\n"
@@ -224,23 +224,23 @@ def test_install_codex_writes_script_and_absolute_path(fake_home) -> None:
     assert script.exists()
     body = cfg.read_text()
     assert str(script) in body
-    assert "__PA1_NOTIFY_PATH__" not in body
+    assert "__PII_NOTIFY_PATH__" not in body
     mode = script.stat().st_mode
     assert mode & stat.S_IXUSR  # executable for owner
 
 
-def test_install_aider_drops_wrapper_next_to_pa1_lint(fake_home, monkeypatch) -> None:
-    """When pa1-lint is on PATH, wrapper goes in the same dir."""
+def test_install_aider_drops_wrapper_next_to_pii_lint(fake_home, monkeypatch) -> None:
+    """When pii-lint is on PATH, wrapper goes in the same dir."""
     fake_bin = fake_home / "bin"
     fake_bin.mkdir()
-    fake_pa1 = fake_bin / "pa1-lint"
-    fake_pa1.write_text("#!/bin/sh\necho pa1-lint stub\n")
+    fake_pa1 = fake_bin / "pii-lint"
+    fake_pa1.write_text("#!/bin/sh\necho pii-lint stub\n")
     fake_pa1.chmod(0o755)
     monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", ""))
 
     rc = install_hooks.install(["aider"], "user")
     assert rc == 0
-    wrapper = fake_bin / "pa1-lint-aider"
+    wrapper = fake_bin / "pii-lint-aider"
     assert wrapper.exists()
     assert wrapper.stat().st_mode & stat.S_IXUSR
 
@@ -278,7 +278,7 @@ def test_templates_loadable() -> None:
 
 
 # ===========================================================================
-# pa1-lint init / uninstall  (global git hook)
+# pii-lint init / uninstall  (global git hook)
 # ===========================================================================
 
 
@@ -293,28 +293,28 @@ def test_init_sets_hooks_path_and_writes_hook(isolated_git_env) -> None:
 def test_init_hook_uses_resolver_not_hard_pinned_python(isolated_git_env) -> None:
     """Hook must call the resolver script, NOT a hard-pinned Python.
 
-    A hard-pinned path silently breaks when the user reinstalls pa1-lint
+    A hard-pinned path silently breaks when the user reinstalls pii-lint
     into a different conda env. The resolver locates a working Python at
     hook-time so the hook survives env switches.
     """
     install_git.install()
     body = (isolated_git_env / ".githooks" / "pre-commit").read_text()
-    resolver = str(isolated_git_env / ".githooks" / "pa1-lint-resolver.sh")
+    resolver = str(isolated_git_env / ".githooks" / "pii-lint-resolver.sh")
     # Hook must reference the resolver by absolute path, not sys.executable.
     assert f'RESOLVER="{resolver}"' in body
     assert '"$RESOLVER" -m pii_linter scan --staged' in body
-    # No hard-pinned $PY, no bare `pa1-lint` or `python -m` call — both
+    # No hard-pinned $PY, no bare `pii-lint` or `python -m` call — both
     # are PATH/explicit-Python deps that the resolver exists to remove.
     assert "$PY" not in body
-    assert "pa1-lint scan" not in body
-    assert "\npa1-lint" not in body
+    assert "pii-lint scan" not in body
+    assert "\npii-lint" not in body
     assert 'python -m' not in body
 
 
 def test_init_writes_resolver_script(isolated_git_env) -> None:
     """The resolver script is a sibling file the hook calls."""
     install_git.install()
-    resolver = isolated_git_env / ".githooks" / "pa1-lint-resolver.sh"
+    resolver = isolated_git_env / ".githooks" / "pii-lint-resolver.sh"
     assert resolver.exists()
     assert resolver.stat().st_mode & stat.S_IXUSR
     body = resolver.read_text()
@@ -323,7 +323,7 @@ def test_init_writes_resolver_script(isolated_git_env) -> None:
     assert "python3" in body
     assert "scan_conda_root" in body  # auto-scan helper
     # Sanity: no per-name probe left over from the old design.
-    assert "cand_conda pa1" not in body
+    assert "cand_conda pii" not in body
     assert "cand_conda test" not in body
 
 
@@ -332,15 +332,15 @@ def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
 
     We create a conda-style layout with a *non-standard* env name
     (e.g. ``team_venv``) and verify the resolver picks it. The point
-    is to prove the resolver does not depend on the names pa1 or test;
+    is to prove the resolver does not depend on the names pii or test;
     it scans every env under each search root.
     """
-    pa1_py = "/home/tts/miniconda3/envs/pa1/bin/python3.11"
-    if not Path(pa1_py).exists():
-        pytest.skip(f"test env not present: {pa1_py}")
+    test_py = str(Path(sys.executable).resolve())
+    if not Path(test_py).exists():
+        pytest.skip(f"test interpreter not present: {test_py}")
     # Sanity: the candidate env must actually have pii_linter importable.
     sanity = subprocess.run(
-        [pa1_py, "-c", "import pii_linter"],
+        [test_py, "-c", "import pii_linter"],
         capture_output=True, text=True,
     )
     if sanity.returncode != 0:
@@ -349,7 +349,7 @@ def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
     fake_home = tmp_path / "home"
     envs = fake_home / "miniconda3" / "envs" / "team_venv" / "bin"
     envs.mkdir(parents=True)
-    (envs / "python3.11").symlink_to(pa1_py)
+    (envs / "python3.11").symlink_to(test_py)
     # No PATH, no CONDA_PREFIX — only the auto-scan under fake_home/miniconda3
     # can find this. Keep bash on PATH so the resolver can launch itself.
     bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
@@ -361,7 +361,7 @@ def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
     resolver = fake_home / "resolver.sh"
     import shutil as _shutil
     _shutil.copy(
-        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pii-lint-resolver.sh",
         resolver,
     )
     resolver.chmod(0o755)
@@ -380,11 +380,11 @@ def test_resolver_skips_broken_envs_and_picks_working_one(tmp_path) -> None:
     first one that probes successfully wins. Broken envs (env exists
     but lib missing) must not block or crash.
     """
-    pa1_py = "/home/tts/miniconda3/envs/pa1/bin/python3.11"
-    if not Path(pa1_py).exists():
-        pytest.skip(f"test env not present: {pa1_py}")
+    test_py = str(Path(sys.executable).resolve())
+    if not Path(test_py).exists():
+        pytest.skip(f"test interpreter not present: {test_py}")
     sanity = subprocess.run(
-        [pa1_py, "-c", "import pii_linter"],
+        [test_py, "-c", "import pii_linter"],
         capture_output=True, text=True,
     )
     if sanity.returncode != 0:
@@ -395,10 +395,10 @@ def test_resolver_skips_broken_envs_and_picks_working_one(tmp_path) -> None:
     broken_bin.mkdir(parents=True)
     (broken_bin / "python3.11").write_text("#!/bin/sh\nexit 1\n")
     (broken_bin / "python3.11").chmod(0o755)
-    # Working env: symlink to real pa1 interpreter.
+    # Working env: symlink to the running test interpreter.
     good_bin = fake_home / "miniconda3" / "envs" / "good" / "bin"
     good_bin.mkdir(parents=True)
-    (good_bin / "python3.11").symlink_to(pa1_py)
+    (good_bin / "python3.11").symlink_to(test_py)
     env = os.environ.copy()
     env["HOME"] = str(fake_home)
     bash = "/usr/bin/bash" if Path("/usr/bin/bash").exists() else shutil_which("bash")
@@ -408,7 +408,7 @@ def test_resolver_skips_broken_envs_and_picks_working_one(tmp_path) -> None:
     resolver = fake_home / "resolver.sh"
     import shutil as _shutil
     _shutil.copy(
-        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pii-lint-resolver.sh",
         resolver,
     )
     resolver.chmod(0o755)
@@ -438,7 +438,7 @@ def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
     # Stub every well-known conda root with a "no lib" Python.
     fake_mini = fake_home / "miniconda3" / "envs"
     fake_mini.mkdir(parents=True)
-    for env_name in ("pa1", "test"):
+    for env_name in ("myenv_a", "myenv_b"):
         env_bin = fake_mini / env_name / "bin"
         env_bin.mkdir(parents=True)
         stub = env_bin / "python3.11"
@@ -451,7 +451,7 @@ def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
     resolver = fake_home / "resolver.sh"
     import shutil as _shutil
     _shutil.copy(
-        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pa1-lint-resolver.sh",
+        "/home/tts/Dev/Personal/vn-pii/pii_linter/hooks/templates/pii-lint-resolver.sh",
         resolver,
     )
     resolver.chmod(0o755)
@@ -467,10 +467,10 @@ def test_init_hook_fails_closed_when_resolver_missing(
     isolated_git_env, monkeypatch
 ) -> None:
     """If the resolver vanishes the hook must not silently approve."""
-    # precommit_body default placeholder is __PA1_RESOLVER_PATH__; replace
+    # precommit_body default placeholder is __PII_RESOLVER_PATH__; replace
     # it with a path that definitely does not exist on disk.
     body = install_git.precommit_body().replace(
-        "__PA1_RESOLVER_PATH__", "/nonexistent/pa1-lint-resolver.sh"
+        "__PII_RESOLVER_PATH__", "/nonexistent/pii-lint-resolver.sh"
     )
     assert '[ ! -x "$RESOLVER" ]' in body
     assert "exit 1" in body
@@ -575,7 +575,7 @@ def test_init_records_state(isolated_git_env) -> None:
     state = json.loads(
         (isolated_git_env / ".githooks" / install_git.STATE_FILE).read_text()
     )
-    assert state == {"marker": "pa1-lint", "set_hooks_path": True}
+    assert state == {"marker": "pii-lint", "set_hooks_path": True}
 
 
 def test_init_survives_git_config_failure(isolated_git_env, monkeypatch) -> None:
@@ -601,7 +601,7 @@ def test_hook_passthrough_actually_runs_repo_commit_msg(tmp_path) -> None:
     home = tmp_path / "home"
     hooks = home / ".githooks"
     hooks.mkdir(parents=True)
-    (home / ".pa1-state").write_text("{}")  # unused; keeps dir non-empty
+    (home / ".pii-state").write_text("{}")  # unused; keeps dir non-empty
     cfg = tmp_path / "gitconfig"
     env = dict(os.environ)
     env["HOME"] = str(home)
@@ -610,12 +610,12 @@ def test_hook_passthrough_actually_runs_repo_commit_msg(tmp_path) -> None:
 
     # Write the shims the way install() does. The pre-commit needs the
     # resolver script present so it does not fail closed on resolver-missing.
-    (hooks / "pa1-lint-resolver.sh").write_text(
-        install_git._read_template("pa1-lint-resolver.sh")
+    (hooks / "pii-lint-resolver.sh").write_text(
+        install_git._read_template("pii-lint-resolver.sh")
     )
-    (hooks / "pa1-lint-resolver.sh").chmod(0o755)
+    (hooks / "pii-lint-resolver.sh").chmod(0o755)
     (hooks / "pre-commit").write_text(
-        install_git.precommit_body(str(hooks / "pa1-lint-resolver.sh"))
+        install_git.precommit_body(str(hooks / "pii-lint-resolver.sh"))
     )
     (hooks / "pre-commit").chmod(0o755)
     for name in install_git.PASSTHROUGH_HOOKS:
@@ -649,12 +649,12 @@ def test_hook_passthrough_actually_runs_repo_commit_msg(tmp_path) -> None:
         cwd=repo, capture_output=True, text=True, env=env,
     )
     assert proc.returncode == 0, proc.stderr
-    # The PA1 hook ran (clean, exit 0) *and* the repo's own hook still ran.
+    # The PII hook ran (clean, exit 0) *and* the repo's own hook still ran.
     assert marker.exists(), "repo commit-msg hook was orphaned by core.hooksPath"
 
 
 def test_cli_init_and_uninstall_roundtrip(isolated_git_env) -> None:
-    """`pa1-lint init` / `uninstall` are wired to the module."""
+    """`pii-lint init` / `uninstall` are wired to the module."""
     from pii_linter import cli
 
     assert cli.main(["init"]) == 0

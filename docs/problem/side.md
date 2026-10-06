@@ -92,7 +92,7 @@ Distinct from project 3 (live App Insights triage), AU2 (CI log classification) 
 
 These pilots review data and configuration. They do not grant elevated access, extract secrets or publish attack procedures.
 
-### PA1. Dataset PII linter (S)
+### PII. Dataset PII linter (S)
 
 - **Recommended tech stack:** Python CLI, regex and column-name heuristics, optional `presidio-analyzer` if approved for the workstation; pytest fixtures with planted PII; exit codes for pre-commit or CI. Scan only paths the intern owns (golden JSONL, sample CSV).
 - **MVP:** Flag likely names, phones, emails, national IDs and free-text blobs in one proposed golden dataset before it is committed, with a suppressions file for known synthetic fields.
@@ -301,7 +301,7 @@ Planning judgement only. Confirm module, fixtures and mentor capacity before ass
 | --- | --- | --- | --- |
 | Data quality | DQ5: User-local date mismatch | Documented PROD fixture already exists | DQ2: VIN consistency |
 | Integration reliability | IR2: Interface-log failure digest | Offline logs and a clear triage baseline | IR1: Payload contract snapshot |
-| Privacy and access | PA1: Dataset PII linter | Guards golden files before commit | PA2: Log field allowlist |
+| Privacy and access | PII: Dataset PII linter | Guards golden files before commit | PA2: Log field allowlist |
 | Localization | LG2: Glossary drift checker | Uses tracked docs only | LG1: Untranslated label inventory |
 | Knowledge navigation | KN1: Skill citation checker | Fast, read-only, high signal for this repo | KN4: Runbook freshness |
 | Workflow analytics | WA1: Work-order aging snapshot | One export yields a reviewable chart | WA3: Warranty rejection Pareto |
@@ -309,4 +309,4 @@ Planning judgement only. Confirm module, fixtures and mentor capacity before ass
 
 **Optional interest pairings (discussion only):** Trần An Thắng can explore KN2 or PA5; Trần Trung Hiếu can explore WA3 or DQ1; Trần Huy Hoàng can explore IR2 or IR5; Lê Trung Hiếu can explore HY5 or PA2. These do not change the primary assignments.
 
-For a shared wave-2 demo, connect **DQ5 → LG4 → PA1**: detect a date-boundary mismatch, lock locale formatting tests, then lint the supporting dataset for PII before it is shared.
+For a shared wave-2 demo, connect **DQ5 → LG4 → PII**: detect a date-boundary mismatch, lock locale formatting tests, then lint the supporting dataset for PII before it is shared.

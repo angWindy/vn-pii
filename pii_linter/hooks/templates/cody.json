@@ -1,9 +1,9 @@
 {
   "_comment": [
-    "PA1 PII linter hook for Sourcegraph Cody.",
+    "PII linter hook for Sourcegraph Cody.",
     "Install: copy this file to ~/.config/sourcegraph/cody.json (user-wide) or",
     "          .cody.json (per-project) and merge with your existing config.",
-    "Requires: `pa1-lint` on PATH. `pip install git+https://github.com/angWindy/vn-pii`.",
+    "Requires: `pii-lint` on PATH. `pip install git+https://github.com/angWindy/vn-pii`.",
     "",
     "Behavior:",
     "  postMessage: after Cody writes/edits a file, scan it. Exit 2 on HIGH+",
@@ -17,7 +17,7 @@
       "event": "postMessage",
       "matcher": "edit|insert",
       "type": "command",
-      "command": "bash -c 'p=$(python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"filePath\\\",\\\"\\\"))\" 2>/dev/null); case \"$p\" in *.csv|*.jsonl|*.md) pa1-lint scan -- \"$p\" || exit 2;; esac'"
+      "command": "bash -c 'p=$(python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"filePath\\\",\\\"\\\"))\" 2>/dev/null); case \"$p\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$p\" || exit 2;; esac'"
     }
   ]
 }

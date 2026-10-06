@@ -22,7 +22,7 @@
 - Found X → decided Y because Z.
 
 ## Acceptance
-- [x] `pa1-lint scan fixtures/gold/leads_50.csv` → exit 1
+- [x] `pii-lint scan fixtures/gold/leads_50.csv` → exit 1
 - [x] `pytest tests/ -v` → N tests pass
 
 ## Outstanding

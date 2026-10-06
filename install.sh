@@ -1,11 +1,11 @@
 #!/bin/sh
-# PA1 PII linter - one-command installer.
+# PII linter - one-command installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
 #
 # Installs the package and enables the global git hook, so afterwards a plain
 # `git commit` in any repo blocks HIGH/CRITICAL PII with no per-repo setup.
-# Run `pa1-lint uninstall` to remove the hook again.
+# Run `pii-lint uninstall` to remove the hook again.
 #
 # POSIX sh, no bashisms. Override the source with REPO_URL=... sh install.sh.
 set -eu
@@ -16,7 +16,7 @@ die() { echo "install.sh: $*" >&2; exit 1; }
 
 # --- 1. a Python 3.11+ interpreter (tomllib is stdlib from 3.11) ----------
 # Prefer the interpreter the user's shell already has on PATH. When the user
-# has run `conda activate pa1`, the `python` symlink in that env is on PATH
+# has run `conda activate pii`, the `python` symlink in that env is on PATH
 # first, and conda envs often lack `python3` -- so we must test `python` before
 # `python3.N` to avoid grabbing the system 3.12 by accident.
 PY=""
@@ -69,7 +69,7 @@ then
     "$PY" -m pip install --upgrade "$REPO_URL" >/dev/null \
         || die "pip install failed. Try: $PY -m pip install $REPO_URL"
 else
-    VENV="$HOME/.local/share/pa1-lint/venv"
+    VENV="$HOME/.local/share/pii-lint/venv"
     echo "==> No pipx and no active venv; creating a private one at"
     echo "    $VENV"
     # A plain venv: its pip is what installs the package, and the venv path is
@@ -100,28 +100,28 @@ fi
 # is the last resort *only* when the package really is installed there —
 # otherwise `python -m pii_linter` would import nothing and `init` would
 # report a confusing failure instead of a real one.
-PA1=""
-if command -v pa1-lint >/dev/null 2>&1; then
-    PA1="pa1-lint"
+PII=""
+if command -v pii-lint >/dev/null 2>&1; then
+    PII="pii-lint"
 elif [ -n "${VPY:-}" ] && [ -x "$VPY" ]; then
-    PA1="$VPY -m pii_linter"
-elif [ -x "$HOME/.local/bin/pa1-lint" ]; then
-    PA1="$HOME/.local/bin/pa1-lint"
+    PII="$VPY -m pii_linter"
+elif [ -x "$HOME/.local/bin/pii-lint" ]; then
+    PII="$HOME/.local/bin/pii-lint"
 elif "$PY" -c 'import pii_linter' >/dev/null 2>&1; then
-    PA1="$PY -m pii_linter"   # same program, same exit codes
+    PII="$PY -m pii_linter"   # same program, same exit codes
 else
     die "installed the package but cannot find its CLI.
   pipx:    export PATH=\"\$HOME/.local/bin:\$PATH\"
-  private: export PATH=\"\$HOME/.local/share/pa1-lint/venv/bin:\$PATH\"
-  then re-run: sh -c \"\$(command -v pa1-lint || echo '$HOME/.local/share/pa1-lint/venv/bin/python') -m pii_linter init\""
+  private: export PATH=\"\$HOME/.local/share/pii-lint/venv/bin:\$PATH\"
+  then re-run: sh -c \"\$(command -v pii-lint || echo '$HOME/.local/share/pii-lint/venv/bin/python') -m pii_linter init\""
 fi
 
 # --- 4. enable the global git hook ----------------------------------------
 # No sudo: the hook must be written for the invoking user, not for root.
 echo "==> Enabling the git hook"
-if ! "$PA1" init; then
+if ! "$PII" init; then
     die "the hook was not installed; the package itself is fine.
-  Retry with: \$PA1 init --dry-run   (prints what it would do, changes nothing)
+  Retry with: \$PII init --dry-run   (prints what it would do, changes nothing)
   If you use husky or another hook manager, see docs/user-guide.md."
 fi
 
@@ -142,10 +142,10 @@ EOF
 if [ -n "${VPY:-}" ]; then
     # The venv's bin dir is usually not on PATH, so tell them how to undo it.
     echo "The CLI lives in a private venv, which is probably not on your PATH:"
-    echo "  export PATH=\"$HOME/.local/share/pa1-lint/venv/bin:\$PATH\""
+    echo "  export PATH=\"$HOME/.local/share/pii-lint/venv/bin:\$PATH\""
     echo "  # add that line to ~/.bashrc to make it permanent"
     echo
     echo "Undo: $VPY -m pii_linter uninstall"
 else
-    echo "Undo: pa1-lint uninstall"
+    echo "Undo: pii-lint uninstall"
 fi

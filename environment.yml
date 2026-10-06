@@ -1,4 +1,4 @@
-name: pa1
+name: pii
 channels:
   - conda-forge
   - defaults

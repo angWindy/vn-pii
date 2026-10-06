@@ -3,8 +3,8 @@
 ## Context
 
 - **Session:** Fix 5 bugs from an external bug report (all reproduced on a green baseline of 68 tests).
-- **Trigger:** User supplied a bug report titled "Báo cáo bug — pa1-lint" with severity ratings, reproduction commands and a suggested fix order (Bug 2 → 3 → 1 → 4 → 5).
-- **Environment:** `pre-commit` 4.6.2, Python 3.12, `pa1-pii-linter` installed from source (not editable).
+- **Trigger:** User supplied a bug report titled "Báo cáo bug — pii-lint" with severity ratings, reproduction commands and a suggested fix order (Bug 2 → 3 → 1 → 4 → 5).
+- **Environment:** `pre-commit` 4.6.2, Python 3.12, `pii-linter` installed from source (not editable).
 
 ## What was done
 
@@ -16,12 +16,12 @@ Seven commits, one fix each, so any of them can be reverted independently.
   - Verified with pre-commit 4.6.2: clean commit → `Passed`, PII commit → `Failed`.
 
 - **`80c58a1` fix(md): scan prose, not just Markdown tables**
-  - `_scan_md` skipped every non-table line, so `pa1-lint scan <file>.md` reported 0 findings for a file that the other two code paths flagged with 5. Same file, same data, three different answers.
+  - `_scan_md` skipped every non-table line, so `pii-lint scan <file>.md` reported 0 findings for a file that the other two code paths flagged with 5. Same file, same data, three different answers.
   - Prose lines are now scanned with no column hints — the same path `guard` and `scan --staged` take. Table rows keep their `col<N>` heuristics unchanged.
 
 - **`8e0d31c` fix(guard): accept the documented `--` separator**
   - `argparse.REMAINDER` swallowed `--` and passed it to subprocess as `argv[0]` → `FileNotFoundError: '--'`. The bare form worked, which is why it survived.
-  - `--` is the documented spelling in 7 files, and the bundled `install-hooks aider` template used it, so every installed `pa1-lint-aider` invocation crashed and never launched aider.
+  - `--` is the documented spelling in 7 files, and the bundled `install-hooks aider` template used it, so every installed `pii-lint-aider` invocation crashed and never launched aider.
   - Normalised inside `guard.run`, the choke point all callers route through.
 
 - **`45eccf6` fix(guard): anchor post-scan to pre-command HEAD**
@@ -54,17 +54,17 @@ Seven commits, one fix each, so any of them can be reverted independently.
 
 ## Acceptance
 
-- [x] `pa1-lint scan <prose .md>` → 5 findings (was 0)
+- [x] `pii-lint scan <prose .md>` → 5 findings (was 0)
 - [x] `scan <file>.md` and `scan --staged` agree on identical content
 - [x] pre-commit 4.6.2: clean commit `Passed`, PII commit `Failed`
-- [x] `pa1-lint guard -- echo hi` → exit 0 (was `FileNotFoundError: '--'`)
-- [x] `pa1-lint guard <committing cmd>` → exit 2, PII in the new commit caught
-- [x] `pa1-lint guard <clean cmd>` → exit 0
+- [x] `pii-lint guard -- echo hi` → exit 0 (was `FileNotFoundError: '--'`)
+- [x] `pii-lint guard <committing cmd>` → exit 2, PII in the new commit caught
+- [x] `pii-lint guard <clean cmd>` → exit 0
 - [x] bad flag → exit 64; CRITICAL finding → exit 2
 - [x] guard scope matrix 6/6 (csv / md prose / md table block; .py / .sh ignored)
 - [x] `pytest tests/` → 78 passed (was 68)
 - [x] each of the 7 commits passes the suite independently
-- [x] `pa1-lint guard -- echo ok` on this repo's own diff → exit 0 (no HIGH+)
+- [x] `pii-lint guard -- echo ok` on this repo's own diff → exit 0 (no HIGH+)
 - [x] All 7 commits authored by the repo's configured author (`angwindy`)
 
 ## Outstanding

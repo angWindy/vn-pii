@@ -110,7 +110,7 @@ def test_staged_scan_passes_on_clean(tmp_path: Path) -> None:
 
 
 def test_cli_scan_staged_exit_code_1(tmp_path: Path) -> None:
-    """End-to-end: `pa1-lint scan --staged` exits 1 on planted PII."""
+    """End-to-end: `pii-lint scan --staged` exits 1 on planted PII."""
     planted = FIX_ROOT / "gold" / "leads_50.csv"
     _make_git_repo(tmp_path, planted)
     with (tmp_path / "leads.csv").open("a", encoding="utf-8") as fh:
@@ -218,7 +218,7 @@ def test_critical_pii_still_exits_2(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Zero-friction entry points: `pa1-lint <path>`, bare `pa1-lint`, and
+# Zero-friction entry points: `pii-lint <path>`, bare `pii-lint`, and
 # `python -m pii_linter` all work without naming the `scan` subcommand.
 # ---------------------------------------------------------------------------
 
@@ -230,8 +230,8 @@ def _planted_csv(tmp_path: Path) -> Path:
     return csv
 
 
-def test_bare_pa1_lint_scans_cwd(tmp_path: Path) -> None:
-    """A bare `pa1-lint` scans the current directory and finds PII."""
+def test_bare_pii_lint_scans_cwd(tmp_path: Path) -> None:
+    """A bare `pii-lint` scans the current directory and finds PII."""
     _planted_csv(tmp_path)
     proc = subprocess.run(
         [sys.executable, "-m", "pii_linter.cli"],
@@ -244,7 +244,7 @@ def test_bare_pa1_lint_scans_cwd(tmp_path: Path) -> None:
 
 
 def test_path_without_scan_subcommand(tmp_path: Path) -> None:
-    """`pa1-lint data.csv` is the same as `pa1-lint scan data.csv`."""
+    """`pii-lint data.csv` is the same as `pii-lint scan data.csv`."""
     csv = _planted_csv(tmp_path)
     proc = subprocess.run(
         [sys.executable, "-m", "pii_linter.cli", str(csv)],
@@ -293,7 +293,7 @@ def test_scan_flag_routes_to_scan_subcommand(tmp_path: Path) -> None:
 
 
 def test_root_help_still_prints_usage() -> None:
-    """`pa1-lint --help` must show root help, not fall through to a scan."""
+    """`pii-lint --help` must show root help, not fall through to a scan."""
     proc = subprocess.run(
         [sys.executable, "-m", "pii_linter.cli", "--help"],
         capture_output=True,

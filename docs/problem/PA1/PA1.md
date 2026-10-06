@@ -1,4 +1,4 @@
-### PA1. Dataset PII linter (S)
+### PII. Dataset PII linter (S)
 
 - **Recommended tech stack:** Python CLI, regex and column-name heuristics, optional `presidio-analyzer` if approved for the workstation; pytest fixtures with planted PII; exit codes for pre-commit or CI. Scan only paths the intern owns (golden JSONL, sample CSV).
 - **MVP:** Flag likely names, phones, emails, national IDs and free-text blobs in one proposed golden dataset before it is committed, with a suppressions file for known synthetic fields.

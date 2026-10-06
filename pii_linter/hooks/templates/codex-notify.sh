@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PA1 PII linter — Codex CLI notify wrapper.
+# PII linter — Codex CLI notify wrapper.
 #
 # Codex calls this script every time a turn ends (success or fail).
 # We scan the staged/working diff and exit 2 on HIGH+ so Codex surfaces
@@ -21,14 +21,14 @@ fi
 #   64 = bad usage (EX_USAGE) — broken config, NOT a PII finding
 # 1/2 block so we stay fail-closed; 64 is surfaced as a config error so
 # nobody chases a PII incident that never happened.
-pa1-lint scan --staged
+pii-lint scan --staged
 rc=$?
 if [ "$rc" -eq 64 ]; then
-    echo "[pa1-lint] pa1-lint was invoked incorrectly (exit 64). Fix the hook/CLI config; this is NOT a PII finding."
+    echo "[pii-lint] pii-lint was invoked incorrectly (exit 64). Fix the hook/CLI config; this is NOT a PII finding."
     exit 64
 fi
 if [ "$rc" -ge 1 ]; then
-    echo "[pa1-lint] CRITICAL/HIGH PII detected in staged diff (exit $rc). Ask Codex to redact before continuing."
+    echo "[pii-lint] CRITICAL/HIGH PII detected in staged diff (exit $rc). Ask Codex to redact before continuing."
     exit 2
 fi
 exit 0

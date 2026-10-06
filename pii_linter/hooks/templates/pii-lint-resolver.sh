@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pa1-lint — Python resolver.
+# pii-lint — Python resolver.
 #
 # The pre-commit hook calls this script, NOT a hard-pinned Python, so
 # that switching conda envs / re-installing into a different env does
@@ -25,7 +25,7 @@
 #
 # No env names are hard-coded. Adding a new conda env, pyenv version,
 # or venv anywhere under those roots is picked up automatically on
-# the next commit — no `pa1-lint init` needed.
+# the next commit — no `pii-lint init` needed.
 #
 # To add a brand-new search root (e.g. your company ships Python
 # under /opt/pyenv): edit `SEARCH_ROOTS` below.
@@ -161,11 +161,11 @@ for vroot in "${VENV_ROOTS[@]}"; do
     fi
 done
 
-# Step 6: user-defined additions via PA1_LINT_EXTRA_PYTHONS. Comma-
+# Step 6: user-defined additions via PII_LINT_EXTRA_PYTHONS. Comma-
 # separated list of absolute paths to try. Useful for one-off
 # interpreter paths that don't fit any of the conventions above.
-if [ -n "${PA1_LINT_EXTRA_PYTHONS:-}" ]; then
-    IFS=',' read -ra extras <<< "$PA1_LINT_EXTRA_PYTHONS"
+if [ -n "${PII_LINT_EXTRA_PYTHONS:-}" ]; then
+    IFS=',' read -ra extras <<< "$PII_LINT_EXTRA_PYTHONS"
     for extra in "${extras[@]}"; do
         try_py "$extra" "$@"
     done
@@ -176,15 +176,15 @@ fi
 # an actionable message.
 # ----------------------------------------------------------------------------
 
-echo "pa1-lint: no Python interpreter with pa1_linter installed was found." >&2
-echo "pa1-lint: searched PATH python, \$CONDA_PREFIX, repo .venv, and every" >&2
-echo "pa1-lint: env under:" >&2
+echo "pii-lint: no Python interpreter with pii_linter installed was found." >&2
+echo "pii-lint: searched PATH python, \$CONDA_PREFIX, repo .venv, and every" >&2
+echo "pii-lint: env under:" >&2
 for root in "${SEARCH_ROOTS[@]}"; do
-    [ -d "$root" ] && echo "pa1-lint:   $root" >&2
+    [ -d "$root" ] && echo "pii-lint:   $root" >&2
 done
-echo "pa1-lint: also looked in $PYENV_ROOT/versions, ${VENV_ROOTS[*]}." >&2
-echo "pa1-lint: install pa1-lint into any of those, e.g.:" >&2
-echo "pa1-lint:   pipx install pa1-pii-linter" >&2
-echo "pa1-lint: or PA1_LINT_EXTRA_PYTHONS=/abs/path/to/python to point at one" >&2
-echo "pa1-lint: or bypass this commit once with: git commit --no-verify" >&2
+echo "pii-lint: also looked in $PYENV_ROOT/versions, ${VENV_ROOTS[*]}." >&2
+echo "pii-lint: install pii-lint into any of those, e.g.:" >&2
+echo "pii-lint:   pipx install pii-linter" >&2
+echo "pii-lint: or PII_LINT_EXTRA_PYTHONS=/abs/path/to/python to point at one" >&2
+echo "pii-lint: or bypass this commit once with: git commit --no-verify" >&2
 exit 1

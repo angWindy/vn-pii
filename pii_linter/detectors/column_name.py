@@ -1,4 +1,4 @@
-"""Column-name heuristic for PA1.
+"""Column-name heuristic for PII.
 
 Maps a CSV/JSONL column header to one or more ``ColumnHint`` guesses. The
 heuristic is regex-based and case-insensitive. It is intentionally conservative:

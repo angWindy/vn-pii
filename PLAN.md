@@ -1,4 +1,4 @@
-# PLAN.md — PA1 PII Linter (Slices 1–2)
+# PLAN.md — PII Linter (Slices 1–2)
 
 > This file is the **single source of truth** for project goal and scope.
 > Detailed history and design decisions: [docs/PLAN.md](docs/PLAN.md).
@@ -18,12 +18,12 @@ Provide a Vietnamese PII scanner that runs **locally with no external service de
 | Entities | `PHONE`, `ID_NUMBER` (CCCD/CMND), `EMAIL`, `CARD_NO` (Luhn), `ASSET` (VIN/plate), `URL_HANDLE` (zalo.me), `NOTE` (free-text combo), `PERSON` (column hint) |
 | Detectors | `column_name`, `content_regex`, `luhn_card`, `free_text` |
 | File formats | `.csv`, `.jsonl`, `.md` (tables and prose) |
-| CLI | `pa1-lint scan <path>`, `pa1-lint guard -- <cmd>` |
+| CLI | `pii-lint scan <path>`, `pii-lint guard -- <cmd>` |
 | Output | Markdown (default) or JSON |
 | Severity | LOW / MEDIUM / HIGH / CRITICAL + exit code 0/1/2/3 |
 | Suppressions | YAML with `column_pattern`, `value_prefix`, `owner`, `expires_at` |
 | Pre-commit | `.pre-commit-hooks.yaml` at root, copy-paste via `examples/` |
-| Env | `pa1` conda env (Python 3.11) |
+| Env | `pii` conda env (Python 3.11) |
 
 ## Out of scope (Slice 1 does **not** include)
 
@@ -32,7 +32,7 @@ Provide a Vietnamese PII scanner that runs **locally with no external service de
 - SARIF / GitHub Action output
 - Precision/recall evaluation
 - PyPI / conda-forge publishing
-- First-party wrappers for Cursor / Aider / Claude Code (slice 1 ships only `pa1-lint guard`)
+- First-party wrappers for Cursor / Aider / Claude Code (slice 1 ships only `pii-lint guard`)
 
 ## Target directory layout
 
@@ -42,8 +42,8 @@ vn-pii/
 ├── INDEX.md                  ← navigation graph for AI agents
 ├── AGENTS.md                 ← workflow rules for AI agents
 ├── README.md                 ← two personas (contributor / user)
-├── pyproject.toml            ← package metadata + entry point `pa1-lint`
-├── environment.yml           ← conda env `pa1`, Python 3.11
+├── pyproject.toml            ← package metadata + entry point `pii-lint`
+├── environment.yml           ← conda env `pii`, Python 3.11
 ├── .pre-commit-hooks.yaml    ← hook definition consumed by other repos
 ├── suppressions.toml         ← example suppressions file (Slice 2; zero runtime dep)
 ├── pii_linter/               ← main package
@@ -56,13 +56,13 @@ vn-pii/
 
 ## Slice 1 completion criteria
 
-- [x] `pa1-lint --version` prints `0.1.0` inside the `pa1` env
-- [x] `pa1-lint scan fixtures/gold/leads_50.csv` → exit 1, at least one PHONE finding
-- [x] `pa1-lint scan fixtures/negative/aggregate_50.csv` → exit 0, zero findings
-- [x] `pa1-lint scan fixtures/gold/notes_50.jsonl` → exit 2 (CRITICAL), at least one CARD_NO
+- [x] `pii-lint --version` prints `0.1.0` inside the `pii` env
+- [x] `pii-lint scan fixtures/gold/leads_50.csv` → exit 1, at least one PHONE finding
+- [x] `pii-lint scan fixtures/negative/aggregate_50.csv` → exit 0, zero findings
+- [x] `pii-lint scan fixtures/gold/notes_50.jsonl` → exit 2 (CRITICAL), at least one CARD_NO
 - [x] `pytest tests/` passes all tests
 - [x] `.pre-commit-hooks.yaml` is parseable
-- [x] Five docs files + `docs/problem/PA1/PA1.md` exist
+- [x] Five docs files + `docs/problem/PII/PII.md` exist
 - [x] `AGENTS.md` + three `.claude/rules/` files exist
 
 ## How to use PLAN.md

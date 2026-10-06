@@ -1,4 +1,4 @@
-"""Detector plugins for PA1.
+"""Detector plugins for PII.
 
 Each module exposes detectors that take a (column_hints, value) pair and
 return a list of ``Finding`` dataclasses. The orchestrator in

@@ -92,7 +92,7 @@ Tách biệt với dự án 3 (triage App Insights trực tiếp), AU2 (phân lo
 
 Các pilot này rà soát dữ liệu và cấu hình. Chúng không cấp quyền cao hơn, trích xuất bí mật hay công bố quy trình tấn công.
 
-### PA1. Bộ lint PII tập dữ liệu (S)
+### PII. Bộ lint PII tập dữ liệu (S)
 
 - **Tech stack đề xuất:** CLI Python, regex và heuristic theo tên cột, tùy chọn `presidio-analyzer` nếu được duyệt cho workstation; pytest fixture với PII gieo sẵn; exit code cho pre-commit hoặc CI. Chỉ quét các đường dẫn thực tập sinh sở hữu (golden JSONL, CSV mẫu).
 - **MVP:** Đánh dấu khả năng chứa tên, số điện thoại, email, CMND/CCCD và blob văn bản tự do trong một golden dataset dự kiến trước khi commit, kèm file suppressions cho các trường tổng hợp đã biết.
@@ -301,7 +301,7 @@ Chỉ là phán đoán kế hoạch. Xác nhận module, fixture và năng lực
 | --- | --- | --- | --- |
 | Chất lượng dữ liệu | DQ5: Lệch ngày UserLocal | Đã có fixture PROD được tài liệu hóa | DQ2: Nhất quán VIN |
 | Độ tin cậy tích hợp | IR2: Tóm tắt lỗi interface log | Log offline và baseline triage rõ ràng | IR1: Snapshot hợp đồng payload |
-| Quyền riêng tư và truy cập | PA1: Lint PII tập dữ liệu | Bảo vệ file vàng trước khi commit | PA2: Allowlist trường log |
+| Quyền riêng tư và truy cập | PII: Lint PII tập dữ liệu | Bảo vệ file vàng trước khi commit | PA2: Allowlist trường log |
 | Bản địa hóa | LG2: Kiểm tra drift glossary | Chỉ dùng tài liệu được track | LG1: Kiểm kê nhãn chưa dịch |
 | Dẫn đường tri thức | KN1: Kiểm tra trích dẫn skill | Nhanh, chỉ-đọc, tín hiệu cao cho repo này | KN4: Độ tươi runbook |
 | Phân tích quy trình | WA1: Snapshot tuổi work-order | Một export cho ra biểu đồ để duyệt | WA3: Pareto từ chối bảo hành |
@@ -309,4 +309,4 @@ Chỉ là phán đoán kế hoạch. Xác nhận module, fixture và năng lực
 
 **Ghép cặp quan tâm tùy chọn (chỉ thảo luận):** Trần An Thắng có thể khám phá KN2 hoặc PA5; Trần Trung Hiếu có thể khám phá WA3 hoặc DQ1; Trần Huy Hoàng có thể khám phá IR2 hoặc IR5; Lê Trung Hiếu có thể khám phá HY5 hoặc PA2. Những ghép này không thay đổi phân công chính.
 
-Để demo Wave-2 chung, nối **DQ5 → LG4 → PA1**: phát hiện lệch ranh giới ngày, khóa unit test định dạng locale, rồi lint tập dữ liệu hỗ trợ để tìm PII trước khi chia sẻ.
+Để demo Wave-2 chung, nối **DQ5 → LG4 → PII**: phát hiện lệch ranh giới ngày, khóa unit test định dạng locale, rồi lint tập dữ liệu hỗ trợ để tìm PII trước khi chia sẻ.

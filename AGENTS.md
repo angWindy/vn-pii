@@ -7,11 +7,11 @@
 
 ## 1. Slice 2 dropped the conda-env enforcement
 
-`pa1-lint` runs in any Python 3.11+ environment — no conda env check, no
+`pii-lint` runs in any Python 3.11+ environment — no conda env check, no
 `exit 3` for a "wrong" environment. This is intentional so end users can
 adopt the tool with a single `pip install` (see [PLAN.md §Slice 2](PLAN.md)).
 
-For this repo's local development, the maintainer still uses the `pa1`
+For this repo's local development, the maintainer still uses the `pii`
 conda env because it isolates `Faker` (a heavy fixture-only dep) from
 the system Python. **That is a maintainer convenience, not a tool
 requirement.** Other contributors can use any virtualenv that has
@@ -22,16 +22,16 @@ If you want the dev env:
 ```bash
 # Optional — only needed to regenerate synthetic fixtures or run tests
 conda env create -f environment.yml
-conda activate pa1
+conda activate pii
 ```
 
-## 2. Wrap PII-risk edits with `pa1-lint guard`
+## 2. Wrap PII-risk edits with `pii-lint guard`
 
 Before modifying a `.csv`, `.jsonl`, or `.md` file outside
 `fixtures/negative/`, wrap the edit tool with the guard:
 
 ```bash
-pa1-lint guard -- <edit-command-and-args>
+pii-lint guard -- <edit-command-and-args>
 ```
 
 If the guard exits `2`, **do not push the edit** — back out and tell

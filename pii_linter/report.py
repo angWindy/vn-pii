@@ -1,4 +1,4 @@
-"""Markdown reporter and per-entity mask helpers for PA1.
+"""Markdown reporter and per-entity mask helpers for PII.
 
 The mask functions are deliberately separate from ``Finding`` so they can be
 unit-tested in isolation and reused by other reporters (JSON, SARIF).
@@ -116,7 +116,7 @@ def _any_diff_mode(result: ScanResult) -> bool:
 def render_markdown(result: ScanResult) -> str:
     """Render a Markdown report grouped by file."""
     lines: list[str] = []
-    lines.append("# PA1 PII scan report")
+    lines.append("# PII scan report")
     lines.append("")
     lines.append(f"- files_scanned: {result.files_scanned}")
     lines.append(f"- total_findings: {len(result.findings)}")

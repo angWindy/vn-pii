@@ -1,8 +1,8 @@
-"""Install PA1 PII linter hook configs into a coding agent's config dir.
+"""Install PII linter hook configs into a coding agent's config dir.
 
 Templates live under ``pii_linter/hooks/templates/`` and are read via
 ``importlib.resources`` so the wheel carries them. This module never
-auto-runs — the user must invoke ``pa1-lint install-hooks <agent>``.
+auto-runs — the user must invoke ``pii-lint install-hooks <agent>``.
 """
 
 from __future__ import annotations
@@ -80,11 +80,11 @@ def plans_for(
             # PreToolUse needs a real script to do JSON parsing; ship it
             # next to settings.json so the agent can exec it by absolute
             # path. The sibling lookup in install() also patches the
-            # __PA1_PRETOOLUSE_PATH__ placeholder in the JSON above.
+            # __PII_PRETOOLUSE_PATH__ placeholder in the JSON above.
             out.append(
                 InstallPlan(
                     agent=a,
-                    target=base / ".claude" / "hooks" / "pa1-lint-pretooluse.sh",
+                    target=base / ".claude" / "hooks" / "pii-lint-pretooluse.sh",
                     template_name="claude-pretooluse.sh",
                     kind="bash_wrapper",
                     label="Claude Code PreToolUse script",
@@ -135,23 +135,23 @@ def plans_for(
             )
         elif a == "aider":
             # Aider is a shell wrapper, not a config file. Drop it next
-            # to `pa1-lint` so users can `pa1-lint-aider` or alias it.
+            # to `pii-lint` so users can `pii-lint-aider` or alias it.
             bindir = _bindir_for_pa1()
             out.append(
                 InstallPlan(
                     agent=a,
-                    target=bindir / "pa1-lint-aider",
+                    target=bindir / "pii-lint-aider",
                     template_name="aider.sh",
                     kind="bash_wrapper",
-                    label="Aider wrapper (pa1-lint-aider)",
+                    label="Aider wrapper (pii-lint-aider)",
                 )
             )
     return out
 
 
 def _bindir_for_pa1() -> Path:
-    """Return the bin dir of the running ``pa1-lint`` executable."""
-    exe = shutil.which("pa1-lint")
+    """Return the bin dir of the running ``pii-lint`` executable."""
+    exe = shutil.which("pii-lint")
     if not exe:
         return _home() / ".local" / "bin"
     return Path(exe).resolve().parent
@@ -163,7 +163,7 @@ def _strip_comment_keys(obj: dict) -> dict:
 
 
 def _merge_json(target: Path, new_payload: dict) -> dict:
-    """Merge a new PA1 payload into an existing JSON file.
+    """Merge a new PII payload into an existing JSON file.
 
     Strategy: deep-merge by key. For each top-level key in the new
     payload:
@@ -172,7 +172,7 @@ def _merge_json(target: Path, new_payload: dict) -> dict:
       - other scalars replace.
 
     For ``hooks`` specifically, we merge event-by-event so a pre-existing
-    ``UserPromptSubmit`` survives a ``pa1-lint install-hooks`` that
+    ``UserPromptSubmit`` survives a ``pii-lint install-hooks`` that
     adds ``PostToolUse`` / ``Stop``. Other top-level keys are preserved
     untouched.
 
@@ -250,11 +250,11 @@ def _patch_json_command_placeholder(
     if placeholder not in json.dumps(payload):
         return payload
     # Find sibling by template_name matching the placeholder:
-    #   __PA1_PRETOOLUSE_PATH__ -> claude-pretooluse.sh
-    #   __PA1_NOTIFY_PATH__     -> codex-notify.sh
+    #   __PII_PRETOOLUSE_PATH__ -> claude-pretooluse.sh
+    #   __PII_NOTIFY_PATH__     -> codex-notify.sh
     target_template = {
-        "__PA1_PRETOOLUSE_PATH__": "claude-pretooluse.sh",
-        "__PA1_NOTIFY_PATH__": "codex-notify.sh",
+        "__PII_PRETOOLUSE_PATH__": "claude-pretooluse.sh",
+        "__PII_NOTIFY_PATH__": "codex-notify.sh",
     }.get(placeholder)
     sibling = next(
         (p for p in plans if p.template_name == target_template), None
@@ -305,7 +305,7 @@ def install(
                 # they point at sibling bash_wrapper plans. We walk
                 # the merged structure (Claude Code nests the command
                 # string under hooks.<event>[].hooks[].command).
-                for placeholder in ("__PA1_PRETOOLUSE_PATH__",):
+                for placeholder in ("__PII_PRETOOLUSE_PATH__",):
                     merged = _patch_json_command_placeholder(
                         merged, placeholder, plans
                     )
@@ -320,18 +320,18 @@ def install(
                 template = _read_text(plan.template_name)
                 if force_replace and plan.target.exists():
                     plan.target.unlink()
-                # The codex template uses __PA1_NOTIFY_PATH__ as a
+                # The codex template uses __PII_NOTIFY_PATH__ as a
                 # placeholder for the on-disk path of the notify script.
                 # This entry's sibling plan writes that script, so we
                 # find it by looking through plans_for output.
-                if "__PA1_NOTIFY_PATH__" in template:
+                if "__PII_NOTIFY_PATH__" in template:
                     sibling = next(
                         (p for p in plans if p.kind == "bash_wrapper"),
                         None,
                     )
                     if sibling is not None:
                         template = template.replace(
-                            "__PA1_NOTIFY_PATH__", str(sibling.target)
+                            "__PII_NOTIFY_PATH__", str(sibling.target)
                         )
                 merged = _merge_toml(plan.target, template)
                 if dry_run:

@@ -1,12 +1,12 @@
-- id: pa1-lint-staged
-  name: PA1 PII linter (staged diff)
+- id: pii-lint-staged
+  name: PII linter (staged diff)
   description: Scan only the lines staged in the current commit and block on HIGH+ PII.
-# `language: python` + `python -m`, not the `pa1-lint` console script.
+# `language: python` + `python -m`, not the `pii-lint` console script.
 # Two failure modes this avoids, both of which let a PII dataset commit
 # clean because pre-commit only *warns* when a hook cannot start:
-#   1. `language: system` runs `pa1-lint` off PATH. Installed in a venv that
+#   1. `language: system` runs `pii-lint` off PATH. Installed in a venv that
 #      is not activated in the shell running `git commit`, it is simply not
-#      there -> "Executable `pa1-lint` not found" -> hook skipped.
+#      there -> "Executable `pii-lint` not found" -> hook skipped.
 #   2. `entry: python -m ...` needs a `python` on PATH, but Debian/Ubuntu
 #      ships `python3` only.
 # `language: python` has pre-commit build a dedicated env from this project's

@@ -1,4 +1,4 @@
-"""Severity model for PA1.
+"""Severity model for PII.
 
 Severity is a discrete 4-level scale. Each entity type has a baseline
 severity in :data:`SEVERITY_BY_ENTITY`. The :data:`COMBO_BOOST` rule

@@ -19,7 +19,7 @@ flowchart TD
     INDEX --> TESTS[tests/<br/>pytest suite]
     INDEX --> FIX[fixtures/{gold,negative}/<br/>]
 
-    AGENTS --> RULES[.claude/rules/<br/>pii-guard · no-commit-gold · conda-env-pa1]
+    AGENTS --> RULES[.claude/rules/<br/>pii-guard · no-commit-gold · conda-env-pii]
     PLAN --> CURSOR[(docs/PLAN.md<br/>design decisions<br/>+ slices)]
 
     SRC --> CLI[cli.py · guard.py]
@@ -28,7 +28,7 @@ flowchart TD
     CLI --> SEV[severity.py]
     CLI --> SP2[suppressions.py]
 
-    DOCS --> PROBLEM[docs/problem/PA1/PA1.md<br/>original problem + side.md]
+    DOCS --> PROBLEM[docs/problem/PII/PII.md<br/>original problem + side.md]
     FIX --> GOLD[fixtures/gold/<br/>gitignored]
     FIX --> NEG[fixtures/negative/<br/>tracked in git]
 ```
@@ -46,7 +46,7 @@ flowchart TD
 | Regex + Luhn spec | [`docs/detectors.md`](docs/detectors.md) |
 | Public API + CLI flags + exit codes | [`docs/spec.md`](docs/spec.md) |
 | Install / suppressions / pre-commit / FAQ | [`docs/user-guide.md`](docs/user-guide.md) |
-| Original problem statement | [`docs/problem/PA1/PA1.md`](docs/problem/PA1/PA1.md) |
+| Original problem statement | [`docs/problem/PII/PII.md`](docs/problem/PII/PII.md) |
 | Code entry point | `pii_linter/cli.py` |
 | Add a detector | `pii_linter/detectors/<name>.py` + update `severity.py` |
 | Severity table | `pii_linter/severity.py` `SEVERITY_BY_ENTITY` |
@@ -66,8 +66,8 @@ flowchart TD
 
 | Before you change | You must |
 |---|---|
-| Edit a `.csv` / `.jsonl` / `.md` outside `fixtures/negative/` | Wrap with `pa1-lint guard -- <edit-cmd>` |
-| Run `pa1-lint` / `pytest` / any `fixtures/generators/` script | No env required — tool runs in any Python 3.11+ |
+| Edit a `.csv` / `.jsonl` / `.md` outside `fixtures/negative/` | Wrap with `pii-lint guard -- <edit-cmd>` |
+| Run `pii-lint` / `pytest` / any `fixtures/generators/` script | No env required — tool runs in any Python 3.11+ |
 | Stage a file inside `fixtures/gold/` | `git restore --staged <file>` |
 | Add a new detector / entity | Add a key to `SEVERITY_BY_ENTITY` and a test in `tests/test_<name>.py` |
 | Add a dependency to `pyproject.toml` | Ask the user first |

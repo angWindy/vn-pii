@@ -32,10 +32,10 @@
 
 ## Acceptance
 
-- [x] `pa1-lint scan fixtures/gold/leads_50.csv` → exit 1, heading is `## leads_50.csv` (not `## .`)
-- [x] `pa1-lint scan fixtures/gold/notes_50.jsonl` → exit 2
-- [x] `pa1-lint scan fixtures/negative/aggregate_50.csv` → exit 0
-- [x] `pa1-lint scan fixtures/gold/` → still runs `rglob` as before
+- [x] `pii-lint scan fixtures/gold/leads_50.csv` → exit 1, heading is `## leads_50.csv` (not `## .`)
+- [x] `pii-lint scan fixtures/gold/notes_50.jsonl` → exit 2
+- [x] `pii-lint scan fixtures/negative/aggregate_50.csv` → exit 0
+- [x] `pii-lint scan fixtures/gold/` → still runs `rglob` as before
 - [x] `python -m pytest tests/ -v` → 53/53 pass (was 39)
 
 ## Outstanding

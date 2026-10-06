@@ -1,6 +1,6 @@
-# PA1 PII Linter — Project Plan
+# PII Linter — Project Plan
 
-This is the archived plan for PA1 PII Linter. It consolidates decisions
+This is the archived plan for PII Linter. It consolidates decisions
 from all slices. For the current status, see [PLAN.md](../PLAN.md).
 
 ---
@@ -57,8 +57,8 @@ config (`pyproject.toml`).
 
 ### Why drop conda-env enforcement (Slice 2)?
 
-End users in downstream projects do not have a `pa1` conda env. The tool
-now runs in any Python 3.11+ environment. The `pa1` env is still used
+End users in downstream projects do not have a `pii` conda env. The tool
+now runs in any Python 3.11+ environment. The `pii` env is still used
 for local development (isolates Faker for fixture generation), but it is
 **not** a tool requirement.
 
@@ -67,7 +67,7 @@ for local development (isolates Faker for fixture generation), but it is
 ## Architecture
 
 ```
-pa1-lint (CLI)
+pii-lint (CLI)
 ├── scan <path> [--suppressions <path>] [--format markdown|json]
 │   ├── cli._list_files()           — enumerate CSV/JSONL/MD up to depth 3
 │   ├── cli._scan_csv()             — csv.DictReader per file
@@ -160,14 +160,14 @@ CSV/JSONL/MD files
 ## Slice 1 acceptance tests (all verified ✅)
 
 ```
-pa1-lint --version                  → 0.1.0
-pa1-lint scan fixtures/gold/leads_50.csv
+pii-lint --version                  → 0.1.0
+pii-lint scan fixtures/gold/leads_50.csv
   → exit 1, ≥1 PHONE finding
-pa1-lint scan fixtures/gold/notes_50.jsonl
+pii-lint scan fixtures/gold/notes_50.jsonl
   → exit 2 (CRITICAL), ≥1 CARD_NO
-pa1-lint scan fixtures/negative/aggregate_50.csv
+pii-lint scan fixtures/negative/aggregate_50.csv
   → exit 0, 0 findings
-pa1-lint scan fixtures/gold/leads_50.csv (single-file path)
+pii-lint scan fixtures/gold/leads_50.csv (single-file path)
   → exit 1 (Slice 1 bug fix)
 pytest tests/                       → 36/36 pass
 ```
@@ -179,10 +179,10 @@ pytest tests/                       → 36/36 pass
 ```
 pip install git+https://github.com/angWindy/vn-pii
   → zero extra packages pulled
-pa1-lint --version                  → works without conda env
-pa1-lint scan fixtures/gold/leads_50.csv
+pii-lint --version                  → works without conda env
+pii-lint scan fixtures/gold/leads_50.csv
   → exit 1, 100 findings (no ImportError: yaml)
-pa1-lint scan fixtures/gold/leads_50.csv \
+pii-lint scan fixtures/gold/leads_50.csv \
   --suppressions suppressions.toml
   → loads TOML correctly (3 entries)
 pytest tests/                       → 36/36 pass
@@ -192,17 +192,17 @@ pytest tests/                       → 36/36 pass
 
 ```
 # Inside a temp git repo with a planted phone line:
-pa1-lint scan --staged
+pii-lint scan --staged
   → exit 1
   → report has "leads.csv:51 | PHONE | 3 | `***`"
   → mode: staged-diff
 
 # Inside a temp git repo with only the clean fixture:
-pa1-lint scan --staged
+pii-lint scan --staged
   → exit 0, 0 findings
 
 # pre-commit framework integration:
-pre-commit run pa1-lint-staged
+pre-commit run pii-lint-staged
   → exit 0 (clean) / exit 1 (HIGH) / exit 2 (CRITICAL)
 
 pytest tests/                       → 39/39 pass

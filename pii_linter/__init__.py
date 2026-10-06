@@ -1,4 +1,4 @@
-"""PA1 Dataset PII Linter.
+"""PII Dataset PII Linter.
 
 A local-only defensive scanner for Vietnamese datasets (CSV / JSONL / Markdown).
 Designed to be wired into pre-commit hooks and AI agent workflows so that
@@ -30,7 +30,7 @@ class Finding:
     downstream tooling.
 
     ``file`` and ``line_no`` carry the diff-cursor path and line number for
-    findings produced by ``pa1-lint scan --staged``. They are empty/zero for
+    findings produced by ``pii-lint scan --staged``. They are empty/zero for
     findings produced by the full-scan path, so the field is optional and
     backwards compatible.
     """
