@@ -15,8 +15,12 @@ REPO_URL="${REPO_URL:-git+https://github.com/angWindy/vn-pii}"
 die() { echo "install.sh: $*" >&2; exit 1; }
 
 # --- 1. a Python 3.11+ interpreter (tomllib is stdlib from 3.11) ----------
+# Prefer the interpreter the user's shell already has on PATH. When the user
+# has run `conda activate pa1`, the `python` symlink in that env is on PATH
+# first, and conda envs often lack `python3` -- so we must test `python` before
+# `python3.N` to avoid grabbing the system 3.12 by accident.
 PY=""
-for cand in python3.13 python3.12 python3.11 python3 python; do
+for cand in python python3 python3.11 python3.12 python3.13; do
     if command -v "$cand" >/dev/null 2>&1; then
         if "$cand" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
             PY="$cand"
@@ -38,7 +42,17 @@ if command -v pipx >/dev/null 2>&1; then
     echo "==> Installing with pipx"
     pipx install --force "$REPO_URL" >/dev/null \
         || die "pipx install failed. Try: pipx install --force $REPO_URL"
-elif [ -n "${VIRTUAL_ENV:-}" ] || "$PY" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+elif
+    # Already inside a managed environment (venv or conda). The conda shell
+    # hook does not export VIRTUAL_ENV, and a Python running *inside* a conda
+    # env has sys.base_prefix equal to sys.prefix (conda re-points base_prefix
+    # to itself when the env is active), so the sys.prefix check alone misses
+    # it. Test the conda env-var first, then venv, then the prefix-mismatch
+    # fallback for pyenv-virtualenv and friends.
+    [ -n "${CONDA_DEFAULT_ENV:-}" ] || \
+    [ -n "${VIRTUAL_ENV:-}" ] || \
+    "$PY" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null
+then
     # Already inside a venv/conda env: that env is ours to modify.
     if [ -n "${CONDA_DEFAULT_ENV:-}" ]; then
         CONDA_PREFIX_SHOWN="${CONDA_PREFIX:-$(conda info --envs 2>/dev/null | awk -v env="$CONDA_DEFAULT_ENV" '$1==env {print $NF}')}"
