@@ -105,10 +105,16 @@ pa1-lint path/to/dataset --suppressions suppressions.toml
 ### Best practices
 
 - Only suppress columns whose values are clearly synthetic (`id_`,
-  `dummy_`, `0`-padded accounts).
+  `dummy_`, `test_`, `example`).
 - Set `expires_at` far in the future but revisit every quarter.
 - Never suppress real customer data. If you find yourself needing to,
   the right fix is to remove the data, not silence the scanner.
+
+Note: do not sanitise a number by padding it with zeros. `0000000000`
+still matches the PHONE regex and `000000000000` still matches the
+CCCD regex, both at CRITICAL, so the commit stays blocked and the data
+is now wrong. Use a non-numeric placeholder such as `REDACTED` or
+`dummy_<n>`.
 
 ### They do not apply to the git hook
 

@@ -39,3 +39,43 @@ def test_mask_value_other_entities_unaffected() -> None:
     """Sanity check: phone mask still works as before."""
     assert "09" in mask_value("0912345678", "PHONE")
     assert "678" in mask_value("0912345678", "PHONE")
+
+
+def test_table_cells_match_header_in_both_modes() -> None:
+    """Every emitted row must have as many cells as the header.
+
+    Regression: whole-file mode emitted a 3-cell header above 4-cell rows
+    (a stray `—` cursor cell), and the separator row always had 4 columns
+    regardless of mode. Both render as a broken table in Markdown.
+    """
+    from pii_linter import Finding, ScanResult
+    from pii_linter.report import render_markdown
+
+    def widths(report: str) -> set[int]:
+        return {row.count("|") for row in report.splitlines() if row.startswith("|")}
+
+    def one(line_no: int = 0) -> list[Finding]:
+        return [
+            Finding(
+                entity="PHONE",
+                severity=3,
+                evidence_raw="x",
+                evidence_masked="***",
+                span=(0, 1),
+                file="d.csv",
+                line_no=line_no,
+            )
+        ]
+
+    # Whole-file mode: no file/line cursor, so no location column.
+    plain = render_markdown(
+        ScanResult(findings=one(), files_scanned=1, by_file={"d.csv": one()})
+    )
+    # header, separator and the single data row must all agree.
+    assert widths(plain) == {4}
+
+    # Diff mode: findings carry a cursor, so the location column appears.
+    diff = render_markdown(
+        ScanResult(findings=one(2), files_scanned=2, by_file={"d.csv": one(2)})
+    )
+    assert widths(diff) == {5}

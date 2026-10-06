@@ -88,6 +88,13 @@ this loader off PyYAML so the tool has zero runtime dependencies.
 **Best practice:**
 
 - Only suppress columns whose values are clearly synthetic (`id_`,
-  `dummy_`, `0`-padded accounts).
+  `dummy_`, `test_`, `example`).
 - Never suppress real customer data; remove from the repo instead.
 - Set `expires_at` far in the future but revisit every quarter.
+
+> **Do not use all-zero placeholders to sanitise data.** The detectors
+> match on shape, not on plausibility: `0\d{9}` matches `0000000000` and
+> `0\d{11}` matches `000000000000`, both at CRITICAL. Padding a real
+> number with zeros does not silence the scanner, it only corrupts the
+> data while still blocking the commit. Replace with a value that is not
+> number-shaped at all — `dummy_<n>`, `REDACTED`, or drop the column.

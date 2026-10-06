@@ -94,16 +94,17 @@ def mask_value(value: str, entity: str) -> str:
     return m(value)
 
 
-def _row(findings: Iterable[Finding]) -> str:
+def _row(findings: Iterable[Finding], with_cursor: bool) -> str:
     rows = []
     for f in findings:
-        if f.file and f.line_no:
-            cursor = f"{f.file}:{f.line_no}"
-        else:
-            cursor = ""
-        rows.append(
-            f"| {cursor or '`—`'} | {f.entity} | {f.severity} | `{f.evidence_masked}` |"
-        )
+        cursor = f"{f.file}:{f.line_no}" if (f.file and f.line_no) else ""
+        cells = [f.entity, str(f.severity), f"`{f.evidence_masked}`"]
+        # Only diff-mode findings carry a file/line cursor. Emitting the
+        # column unconditionally left a 3-cell header above 4-cell rows,
+        # which renders as a broken table in every Markdown viewer.
+        if with_cursor:
+            cells.insert(0, cursor or "`—`")
+        rows.append("| " + " | ".join(cells) + " |")
     return "\n".join(rows)
 
 
@@ -129,14 +130,14 @@ def render_markdown(result: ScanResult) -> str:
     if _any_diff_mode(result):
         lines.append("- mode: staged-diff")
     lines.append("")
-    header_extra = " location |" if _any_diff_mode(result) else ""
+    with_cursor = _any_diff_mode(result)
+    header_extra = " location |" if with_cursor else ""
     for path, findings in result.by_file.items():
         lines.append(f"## {path}")
         lines.append("")
         lines.append(f"|{header_extra} entity | severity | evidence_masked |")
-        sep = "---|" + ("---|" if header_extra else "")
-        lines.append(f"|{sep}---|---|---|")
-        lines.append(_row(findings))
+        lines.append("|---|---|---|---|" if with_cursor else "|---|---|---|")
+        lines.append(_row(findings, with_cursor))
         lines.append("")
         max_sev = max(f.severity for f in findings) if findings else LOW
         if max_sev >= HIGH:

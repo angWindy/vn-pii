@@ -83,6 +83,9 @@ to the matching file.
 
 - Never print `evidence_raw` to stdout, stderr, or a chat message.
 - Never add suppressions for real customer data — only for
-  clearly-synthetic prefixes (`id_`, `dummy_`, `0`-padded accounts).
+  clearly-synthetic prefixes (`id_`, `dummy_`, `test_`, `example`).
+  All-zero padding is NOT a valid synthetic marker: `0000000000` matches
+  the phone regex and `000000000000` matches the CCCD regex, both at
+  CRITICAL, so such a suppression can never unblock a commit.
 - Never modify a release version or push to a registry without human
   approval.
