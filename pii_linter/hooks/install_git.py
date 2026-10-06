@@ -95,10 +95,32 @@ def _interpreter() -> str:
 
     The hook must not depend on PATH: the failure this whole tool exists to
     avoid is a hook that cannot start and therefore approves everything.
+
+    Lookup order, first hit wins:
+      1. ``sys.executable`` — the interpreter the user just ran ``init`` with
+         (conda env, activated venv, system ``python3``, whatever it is).
+      2. Repo-local ``.venv/bin/python3`` — common for projects that ship a
+         dev venv. Lets ``init`` work even if the user installed into a
+         project venv that the active shell has not sourced.
+      3. ``python3`` / ``python`` on PATH.
     """
     exe = sys.executable
     if exe and Path(exe).exists():
         return str(Path(exe).resolve())
+    # Repo-local venv. `git rev-parse` is robust inside and outside a repo.
+    try:
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        repo_root = ""
+    if repo_root:
+        for cand in (".venv/bin/python3", ".venv/bin/python",
+                    ".venv/Scripts/python.exe"):  # Windows venv layout
+            p = Path(repo_root) / cand
+            if p.exists():
+                return str(p.resolve())
     for name in ("python3", "python"):
         found = shutil.which(name)
         if found:

@@ -22,9 +22,28 @@ commands (Cursor, Aider, Claude Code).
 ## Quick start — Use in any project
 
 ```bash
-pip install git+https://github.com/angWindy/vn-pii
+curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
 pa1-lint path/to/your/dataset
 ```
+
+The installer picks an isolated environment for you (`pipx`, else a private
+venv) and switches on the global git hook, so this is the whole setup. See
+[one command, every repo](#quick-start--one-command-every-repo) for what that
+enables.
+
+Installing by hand works too, and is the better choice if you want the CLI in
+an environment you already manage:
+
+```bash
+pipx install git+https://github.com/angWindy/vn-pii   # recommended
+# or, inside a venv/conda env you activate yourself:
+pip install git+https://github.com/angWindy/vn-pii
+```
+
+> **On Debian/Ubuntu, a bare `pip install` into the system Python fails** with
+> `error: externally-managed-environment` (PEP 668). It is the OS protecting
+> itself, not a bug in this tool — and `--user` does **not** bypass it. Use
+> `pipx`, a venv, or the one-liner above. Avoid `--break-system-packages`.
 
 `pa1-lint` on its own scans the current directory. `scan` is optional, so
 `pa1-lint scan <path>` (the older, explicit form) still works identically.
@@ -42,6 +61,10 @@ Suppressions:
 pa1-lint path/to/your/dataset --suppressions suppressions.toml
 ```
 
+Note that suppressions do **not** apply to the git hook, which scans staged
+diff lines and has no column context to match `column_pattern` against. See
+[They do not apply to the git hook](docs/user-guide.md#they-do-not-apply-to-the-git-hook).
+
 And as a plain library call:
 
 ```python
@@ -51,8 +74,8 @@ result = scan("path/to/your/dataset")
 print(len(result.findings))
 ```
 
-That is the whole install story. The tool pulls **zero** extra packages
-because the suppressions loader uses Python 3.11's stdlib `tomllib`.
+The tool pulls **zero** extra packages because the suppressions loader uses
+Python 3.11's stdlib `tomllib`.
 
 ## Quick start — Contributor
 
@@ -139,7 +162,10 @@ pa1-lint guard -- aider --message "summarise repo"
   customer data; the report intentionally shows masked evidence but the
   scan keeps raw evidence in memory.
 - **Never suppress real customer data.** Suppressions exist for clearly
-  synthetic prefixes (`id_`, `dummy_`, `0`-padded accounts).
+  synthetic prefixes (`id_`, `dummy_`, `test_`, `example`). Padding a
+  number with zeros is not one of them — the regex only checks shape, so
+  a zero-padded ten-digit string still trips the phone regex at CRITICAL
+  and a zero-padded twelve-digit string still trips the CCCD regex.
 
 ## License
 

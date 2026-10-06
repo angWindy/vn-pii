@@ -30,30 +30,76 @@ done
 echo "==> Using $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
 # --- 2. install the package, preferring an isolated pipx install ----------
+# Isolation order: pipx -> our own venv -> in-env pip. We never fall back to
+# `pip install --user` on a bare system interpreter: Debian/Ubuntu mark it
+# externally managed (PEP 668) and that blocks --user too, so the "safe"
+# fallback is exactly the one that fails.
 if command -v pipx >/dev/null 2>&1; then
     echo "==> Installing with pipx"
     pipx install --force "$REPO_URL" >/dev/null \
         || die "pipx install failed. Try: pipx install --force $REPO_URL"
-else
-    echo "==> pipx not found, falling back to pip --user"
-    echo "    (install pipx for a cleaner setup: pipx install pipx)"
-    if [ -n "${VIRTUAL_ENV:-}" ] || "$PY" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
-        "$PY" -m pip install --upgrade "$REPO_URL" >/dev/null \
-            || die "pip install failed. Try: $PY -m pip install $REPO_URL"
+elif [ -n "${VIRTUAL_ENV:-}" ] || "$PY" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+    # Already inside a venv/conda env: that env is ours to modify.
+    if [ -n "${CONDA_DEFAULT_ENV:-}" ]; then
+        CONDA_PREFIX_SHOWN="${CONDA_PREFIX:-$(conda info --envs 2>/dev/null | awk -v env="$CONDA_DEFAULT_ENV" '$1==env {print $NF}')}"
+        echo "==> Installing into conda env: $CONDA_DEFAULT_ENV ($CONDA_PREFIX_SHOWN/bin/python)"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        echo "==> Installing into venv: $VIRTUAL_ENV"
     else
-        "$PY" -m pip install --user --upgrade "$REPO_URL" >/dev/null \
-            || die "pip install failed. Try: $PY -m pip install --user $REPO_URL"
+        # Active interpreter reports a different prefix but neither env var is
+        # set — covers `python -m venv .venv && ./venv/bin/python -m pip install`
+        # without sourcing activate, and any Pyenv-virtualenv setup.
+        ACTIVE_PREFIX="$("$PY" -c 'import sys; print(sys.prefix)')"
+        echo "==> Installing into active virtualenv: $ACTIVE_PREFIX"
     fi
+    "$PY" -m pip install --upgrade "$REPO_URL" >/dev/null \
+        || die "pip install failed. Try: $PY -m pip install $REPO_URL"
+else
+    VENV="$HOME/.local/share/pa1-lint/venv"
+    echo "==> No pipx and no active venv; creating a private one at"
+    echo "    $VENV"
+    # A plain venv: its pip is what installs the package, and the venv path is
+    # outside the externally-managed tree, so PEP 668 never applies here.
+    "$PY" -m venv "$VENV" >/dev/null 2>&1 \
+        || die "could not create a venv at $VENV. Install one with:
+  $PY -m venv $VENV
+or install pipx (recommended): pipx install pipx"
+    VPY="$VENV/bin/python"
+    [ -x "$VPY" ] || VPY="$VENV/bin/python3"
+    [ -x "$VPY" ] || die "venv at $VENV has no interpreter."
+
+    # `python -m venv` either seeds pip via ensurepip or fails outright, so
+    # there is no "venv without pip" state to recover from here. Check anyway:
+    # a distro missing python3-venv can produce a directory with no pip, and
+    # the install below would then fail with a confusing "No module named pip".
+    "$VPY" -m pip --version >/dev/null 2>&1 \
+        || die "created $VENV but it has no pip (Debian/Ubuntu: apt install python3-venv).
+  Or install pipx instead: pipx install $REPO_URL"
+    "$VPY" -m pip install --upgrade "$REPO_URL" >/dev/null \
+        || die "pip install into the private venv failed. Try:
+  $VPY -m pip install $REPO_URL"
 fi
 
-# --- 3. locate the CLI (a pipx bin dir is often off a non-login PATH) -----
+# --- 3. locate the CLI ---------------------------------------------------
+# Order matters: a CLI already on PATH is the user's deliberate choice, then
+# the private venv we just created, then ~/.local/bin. The system interpreter
+# is the last resort *only* when the package really is installed there —
+# otherwise `python -m pii_linter` would import nothing and `init` would
+# report a confusing failure instead of a real one.
 PA1=""
 if command -v pa1-lint >/dev/null 2>&1; then
     PA1="pa1-lint"
+elif [ -n "${VPY:-}" ] && [ -x "$VPY" ]; then
+    PA1="$VPY -m pii_linter"
 elif [ -x "$HOME/.local/bin/pa1-lint" ]; then
     PA1="$HOME/.local/bin/pa1-lint"
-else
+elif "$PY" -c 'import pii_linter' >/dev/null 2>&1; then
     PA1="$PY -m pii_linter"   # same program, same exit codes
+else
+    die "installed the package but cannot find its CLI.
+  pipx:    export PATH=\"\$HOME/.local/bin:\$PATH\"
+  private: export PATH=\"\$HOME/.local/share/pa1-lint/venv/bin:\$PATH\"
+  then re-run: sh -c \"\$(command -v pa1-lint || echo '$HOME/.local/share/pa1-lint/venv/bin/python') -m pii_linter init\""
 fi
 
 # --- 4. enable the global git hook ----------------------------------------
@@ -77,5 +123,15 @@ Try it:
   cd "$(mktemp -d)" && git init -q . && cp /tmp/t.csv . \
     && git add t.csv && git commit -m test     # <- blocked
 
-Undo: pa1-lint uninstall
 EOF
+
+if [ -n "${VPY:-}" ]; then
+    # The venv's bin dir is usually not on PATH, so tell them how to undo it.
+    echo "The CLI lives in a private venv, which is probably not on your PATH:"
+    echo "  export PATH=\"$HOME/.local/share/pa1-lint/venv/bin:\$PATH\""
+    echo "  # add that line to ~/.bashrc to make it permanent"
+    echo
+    echo "Undo: $VPY -m pii_linter uninstall"
+else
+    echo "Undo: pa1-lint uninstall"
+fi
