@@ -155,7 +155,9 @@ pii-lint install-hooks claude-code --project
 pii-lint install-hooks codex --project
 ```
 
-Supported agents: `claude-code`, `cursor`, `cody`, `codex`, `aider`.
+Supported agents: `claude-code`, `cursor`, `cody`, `codex`, `aider`,
+`opencode`, `gemini`, `zed`, `antigravity`, `qwen`, `hermes`,
+`openclaw`, `kimi`, `codebuddy`, `joycode`, `copilot`.
 Claude Code uses `PreToolUse` + `PostToolUse` + `Stop`; Codex uses
 `notify` (it has no PreToolUse). See
 [docs/user-guide.md §Coding-agent hooks](docs/user-guide.md#coding-agent-hooks-claude-code-cursor-cody-codex-)

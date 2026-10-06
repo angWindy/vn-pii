@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "PII linter hook for Moonshot Kimi CLI.",
+    "Install: `pii-lint install-hooks kimi` merges this into",
+    "          ~/.kimi/settings.json (user-wide) or",
+    "          .kimi/settings.json (per-project).",
+    "Requires: `pii-lint` on PATH.",
+    "",
+    "Behavior:",
+    "  PostToolUse: after Kimi writes/edits a file, scan it. The env var",
+    "               $KIMI_TOOL_FILE_PATH is set when the hook fires.",
+    "               Exit 2 on HIGH+ to force Kimi to redact.",
+    "  Stop:        at end-of-turn, scan the staged diff. Exit 2 forces",
+    "               cleanup before the agent signs off."
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$KIMI_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pii-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

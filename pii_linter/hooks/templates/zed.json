@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "PII linter hook for Zed editor (agent panel).",
+    "Install: `pii-lint install-hooks zed` merges this into",
+    "          ~/.config/zed/settings.json (user-wide) or",
+    "          .zed/settings.json (per-project).",
+    "Requires: `pii-lint` on PATH.",
+    "",
+    "Behavior:",
+    "  post_tool_use: after Zed's agent writes/edits a buffer, scan it.",
+    "                 $ZED_TOOL_FILE_PATH is set by Zed's hook runtime.",
+    "                 Exit 2 on HIGH+ so Zed surfaces the report and",
+    "                 blocks the next turn.",
+    "  Stop:          at end-of-session, scan the staged diff. Exit 2",
+    "                 forces a cleanup pass before final save."
+  ],
+  "hooks": {
+    "post_tool_use": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$ZED_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pii-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

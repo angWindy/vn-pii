@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "PII linter hook for Google Gemini CLI.",
+    "Install: `pii-lint install-hooks gemini` writes ~/.gemini/settings.json.",
+    "Requires: `pii-lint` on PATH.",
+    "",
+    "Behavior:",
+    "  after_tool: after Gemini writes/edits a file, scan it. The agent",
+    "              sets $GEMINI_TOOL_FILE_PATH for the hook. Exit 2 on HIGH+.",
+    "  Stop:       at end-of-turn, scan the staged diff. Exit 2 to force",
+    "              cleanup before the agent finishes the turn."
+  ],
+  "hooks": {
+    "after_tool": [
+      {
+        "matcher": "WriteFile|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$GEMINI_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pii-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

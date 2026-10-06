@@ -22,7 +22,12 @@ from typing import Literal
 # "merge" for JSON means: read existing JSON, update the relevant key,
 #   write back. "replace" for TOML means: append the [project] block
 #   only if the file does not already have a `notify` line.
-Agent = Literal["claude-code", "cursor", "cody", "codex", "aider", "all"]
+Agent = Literal[
+    "claude-code", "cursor", "cody", "codex", "aider",
+    "opencode", "gemini", "zed", "antigravity", "qwen",
+    "hermes", "openclaw", "kimi", "codebuddy", "joycode",
+    "copilot", "all",
+]
 
 _TEMPLATES = resources.files("pii_linter.hooks.templates")
 
@@ -146,7 +151,38 @@ def plans_for(
                     label="Aider wrapper (pii-lint-aider)",
                 )
             )
+        elif a in _JSON_HOOK_AGENTS:
+            base = proj if scope == "project" else home
+            rel, label = _JSON_HOOK_AGENTS[a]
+            out.append(
+                InstallPlan(
+                    agent=a,
+                    target=base / rel,
+                    template_name=f"{a}.json",
+                    kind="json",
+                    label=label,
+                )
+            )
     return out
+
+
+# Table-driven agent -> (config path relative to $HOME or project root,
+# human label). Each of these agents has a single JSON hook config in
+# pii_linter/hooks/templates/<agent>.json. Merge strategy: deep-merge
+# into the existing file, preserving any pre-existing keys.
+_JSON_HOOK_AGENTS: dict[str, tuple[str, str]] = {
+    "opencode":   (".config/opencode/hooks.json",    "OpenCode CLI"),
+    "gemini":     (".gemini/settings.json",           "Google Gemini CLI"),
+    "zed":        (".config/zed/settings.json",       "Zed editor"),
+    "antigravity":(".antigravity/hooks.json",         "Google Antigravity"),
+    "qwen":       (".qwen/settings.json",             "Alibaba Qwen CLI"),
+    "hermes":     (".hermes/settings.json",           "Nous Hermes"),
+    "openclaw":   (".openclaw/hooks.json",            "OpenClaw"),
+    "kimi":       (".kimi/settings.json",             "Moonshot Kimi"),
+    "codebuddy":  (".codebuddy/hooks.json",           "Tencent CodeBuddy"),
+    "joycode":    (".joycode/hooks.json",             "JD JoyCode"),
+    "copilot":    (".config/github-copilot/hooks.json", "GitHub Copilot"),
+}
 
 
 def _bindir_for_pa1() -> Path:
@@ -288,7 +324,7 @@ def install(
     """
     plans = plans_for(agents, scope)  # type: ignore[arg-type]
     if not plans:
-        print("No agents selected. Use one of: claude-code, cursor, cody, codex, aider, all")
+        print("No agents selected. Use one of: claude-code, cursor, cody, codex, aider, opencode, gemini, zed, antigravity, qwen, hermes, openclaw, kimi, codebuddy, joycode, copilot, all")
         return 1
 
     failures = 0

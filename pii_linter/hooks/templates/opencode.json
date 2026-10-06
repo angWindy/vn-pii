@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "PII linter hook for OpenCode CLI.",
+    "Install: `pii-lint install-hooks opencode` merges this into",
+    "          ~/.config/opencode/hooks.json (user-wide) or",
+    "          .opencode/hooks.json (per-project).",
+    "Requires: `pii-lint` on PATH.",
+    "",
+    "Behavior:",
+    "  PostToolUse: after the agent writes/edits a file, scan it. The",
+    "               env var $OPENCODE_TOOL_FILE_PATH is set by OpenCode",
+    "               when the hook fires. Exit 2 on HIGH+ so the agent",
+    "               is forced to redact before continuing.",
+    "  Stop:        at end-of-turn, scan the staged diff. Exit 2 to",
+    "               force a cleanup turn before the agent signs off."
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$OPENCODE_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pii-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

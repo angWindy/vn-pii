@@ -294,7 +294,9 @@ pii-lint install-hooks codex --dry-run
 pii-lint install-hooks cursor --force-replace
 ```
 
-The agent list is `claude-code | cursor | cody | codex | aider | all`.
+The agent list is `claude-code | cursor | cody | codex | aider |
+opencode | gemini | zed | antigravity | qwen | hermes | openclaw |
+kimi | codebuddy | joycode | copilot | all`.
 Aider is special: it drops a `pii-lint-aider` wrapper next to the
 `pii-lint` binary (or in `$HOME/.local/bin` if the lookup fails), so you
 can alias `aider-safe='pii-lint-aider'` or call it directly.

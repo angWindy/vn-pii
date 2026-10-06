@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "PII linter hook for Nous Research Hermes agent.",
+    "Install: `pii-lint install-hooks hermes` merges this into",
+    "          ~/.hermes/settings.json (user-wide) or",
+    "          .hermes/settings.json (per-project).",
+    "Requires: `pii-lint` on PATH.",
+    "",
+    "Behavior:",
+    "  PostToolUse: after Hermes writes/edits a file, scan it. The env var",
+    "               $HERMES_TOOL_FILE_PATH is set when the hook fires.",
+    "               Exit 2 on HIGH+ to force Hermes to redact.",
+    "  Stop:        at end-of-turn, scan the staged diff. Exit 2 forces",
+    "               cleanup before the agent signs off."
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$HERMES_TOOL_FILE_PATH\"; case \"$f\" in *.csv|*.jsonl|*.md) pii-lint scan -- \"$f\" || exit 2;; esac'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pii-lint scan --staged || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

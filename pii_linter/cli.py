@@ -475,8 +475,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_install.add_argument(
         "agent",
-        choices=("claude-code", "cursor", "cody", "codex", "aider", "all"),
-        help="Which agent's config to install. 'all' covers the 4 JSON/TOML agents.",
+        choices=(
+            "claude-code", "cursor", "cody", "codex", "aider",
+            "opencode", "gemini", "zed", "antigravity", "qwen",
+            "hermes", "openclaw", "kimi", "codebuddy", "joycode",
+            "copilot", "all",
+        ),
+        help="Which agent's config to install. 'all' covers every JSON/TOML agent.",
     )
     p_install.add_argument(
         "--user",
