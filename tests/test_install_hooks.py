@@ -672,6 +672,389 @@ def test_cli_init_is_not_rewritten_to_scan(isolated_git_env) -> None:
     assert cli._normalise_argv([]) == ["scan", "."]
 
 
+# ---------------------------------------------------------------------------
+# End-to-end tests: invoke the agent hook scripts as Claude Code / Codex
+# would invoke them, with real JSON on stdin, and verify PII is actually
+# blocked. These tests do NOT mock `pii-lint` — they use the real binary
+# the editable install dropped into the test env.
+# ---------------------------------------------------------------------------
+
+
+def _write_repo_with_files(tmp_path: Path, files: dict[str, str]) -> Path:
+    """Create a git repo under tmp_path with the given file→content map.
+
+    All files are pre-staged. The repo is configured to disable the
+    test runner's user-level PII hook (so this test only sees the
+    agent hook under test, not anything in ~/.githooks).
+    """
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sp.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    sp.run(["git", "config", "user.email", "t@t.t"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    # Disable any inherited PII pre-commit hook for this repo only.
+    sp.run(
+        ["git", "config", "core.hooksPath", "/dev/null"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    for rel, content in files.items():
+        target = repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+    return repo
+
+
+def test_claude_pretooluse_blocks_pii_in_new_file_write(tmp_path: Path) -> None:
+    """Simulate Claude Code calling PreToolUse for a Write tool call.
+
+    Claude sends a JSON blob on stdin like:
+        {"tool_name": "Write", "tool_input": {"file_path": "...", "content": "..."}}
+    We feed a CSV with a phone number. The hook must extract the path,
+    write content to a temp file, run pii-lint, and exit 2 to block.
+    """
+    import json as _json
+    import subprocess as sp
+
+    # Install hooks in user-scope so the script lands at
+    # <fake_home>/.claude/hooks/pii-lint-pretooluse.sh.
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    rc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True,
+    )
+    assert rc.returncode == 0, rc.stderr
+    pretooluse = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
+    assert pretooluse.exists()
+    assert pretooluse.stat().st_mode & stat.S_IXUSR
+
+    # Build the tool call Claude would emit.
+    target_csv = "/tmp/sandbox/contacts.csv"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": target_csv,
+            "content": "name,phone\neve,0912345678\n",
+        },
+    }
+    proc = sp.run(
+        ["bash", str(pretooluse)],
+        input=_json.dumps(payload), capture_output=True, text=True, env=env,
+    )
+    # PreToolUse contract: HIGH+ PII -> exit 2, stderr has the
+    # "blocked" message so Claude sees why.
+    assert proc.returncode == 2, (
+        f"expected exit 2 (block), got {proc.returncode}\n"
+        f"stdout: {proc.stdout!r}\nstderr: {proc.stderr!r}"
+    )
+    assert "blocked" in proc.stderr.lower()
+    assert target_csv in proc.stderr
+
+
+def test_claude_pretooluse_passes_clean_csv(tmp_path: Path) -> None:
+    """Same harness, but the Write content has no PII -> exit 0."""
+    import json as _json
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    rc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True,
+    )
+    assert rc.returncode == 0, rc.stderr
+    pretooluse = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
+    target_csv = "/tmp/sandbox/clean.csv"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": target_csv,
+            "content": "name,note\nalpha,ok\n",
+        },
+    }
+    proc = sp.run(
+        ["bash", str(pretooluse)],
+        input=_json.dumps(payload), capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, (
+        f"expected exit 0, got {proc.returncode}\nstderr: {proc.stderr}"
+    )
+
+
+def test_claude_pretooluse_skips_non_pii_extensions(tmp_path: Path) -> None:
+    """PreToolUse should be a no-op for .py/.js/etc — those are out of scope."""
+    import json as _json
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    pretooluse = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/tmp/x.py",
+            # Even if this content were PII, .py is not in scope, so the
+            # hook must short-circuit (exit 0) without scanning.
+            "content": "phone = '0912345678'\n",
+        },
+    }
+    proc = sp.run(
+        ["bash", str(pretooluse)],
+        input=_json.dumps(payload), capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_claude_pretooluse_blocks_existing_csv_via_edit(tmp_path: Path) -> None:
+    """Edit tool on an existing CSV: scan the file on disk, block on PII."""
+    import json as _json
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    pretooluse = fake_home / ".claude" / "hooks" / "pii-lint-pretooluse.sh"
+    # Existing file containing PII — the Edit path scans the file as-is.
+    target = tmp_path / "leak.csv"
+    target.write_text("name,phone\neve,0912345678\n")
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": str(target),
+            "old_string": "alpha,ok",
+            "new_string": "mallory,0900000000",
+        },
+    }
+    proc = sp.run(
+        ["bash", str(pretooluse)],
+        input=_json.dumps(payload), capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert str(target) in proc.stderr
+
+
+def test_claude_posttooluse_blocks_via_environment_variable(tmp_path: Path) -> None:
+    """PostToolUse command string uses $CLAUDE_TOOL_FILE_PATH.
+
+    The PostToolUse command lives in settings.json as a shell snippet.
+    Run that snippet directly (it's a `bash -c '...'` invocation) and
+    verify it scans the file Claude just wrote and blocks on PII.
+    """
+    import json as _json
+    import subprocess as sp
+    import shlex
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    rc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    settings = fake_home / ".claude" / "settings.json"
+    assert settings.exists()
+    body = _json.loads(settings.read_text())
+    cmd_str = body["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+    # Sanity: the command reads $CLAUDE_TOOL_FILE_PATH and dispatches
+    # on extension. Run it directly.
+    target = tmp_path / "leak.csv"
+    target.write_text("name,phone\neve,0912345678\n")
+    proc = sp.run(
+        ["bash", "-c", cmd_str], capture_output=True, text=True,
+        env={**env, "CLAUDE_TOOL_FILE_PATH": str(target)},
+    )
+    # PostToolUse contract: HIGH+ -> exit 2 (the command appends
+    # `|| exit 2` so the wrapper's exit code propagates).
+    assert proc.returncode == 2, (
+        f"expected exit 2, got {proc.returncode}\nstdout: {proc.stdout!r}\n"
+        f"stderr: {proc.stderr!r}"
+    )
+
+
+def test_codex_notify_blocks_pii_in_staged_diff(tmp_path: Path) -> None:
+    """Codex notify: a real git repo with PII staged -> exit 2."""
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    rc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "codex"],
+        env=env, capture_output=True, text=True,
+    )
+    assert rc.returncode == 0, rc.stderr
+    notify = fake_home / ".codex" / "hooks" / "codex-notify.sh"
+    assert notify.exists()
+    assert notify.stat().st_mode & stat.S_IXUSR
+
+    repo = _write_repo_with_files(
+        tmp_path,
+        {"leak.csv": "name,phone\neve,0912345678\n"},
+    )
+    sp.run(["git", "add", "leak.csv"], cwd=repo, check=True, capture_output=True)
+    proc = sp.run(["bash", str(notify)], cwd=repo, capture_output=True, text=True, env=env)
+    # Contract: HIGH+ in staged diff -> exit 2 so Codex re-prompts.
+    assert proc.returncode == 2, (
+        f"expected exit 2, got {proc.returncode}\nstdout: {proc.stdout!r}\n"
+        f"stderr: {proc.stderr!r}"
+    )
+    # The notify script prints the blocking reason to stdout (Codex
+    # captures notify stdout and feeds it back into the conversation).
+    combined = (proc.stdout + proc.stderr).lower()
+    assert "staged diff" in combined
+    assert "pii" in combined or "high" in combined or "critical" in combined
+
+
+def test_codex_notify_passes_clean_staged_diff(tmp_path: Path) -> None:
+    """Codex notify: clean staged diff -> exit 0."""
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "codex"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    notify = fake_home / ".codex" / "hooks" / "codex-notify.sh"
+    repo = _write_repo_with_files(
+        tmp_path,
+        {"clean.csv": "name,note\nalpha,ok\n"},
+    )
+    sp.run(["git", "add", "clean.csv"], cwd=repo, check=True, capture_output=True)
+    proc = sp.run(["bash", str(notify)], cwd=repo, capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, (
+        f"expected exit 0, got {proc.returncode}\nstderr: {proc.stderr}"
+    )
+
+
+def test_codex_notify_is_noop_outside_git_repo(tmp_path: Path) -> None:
+    """Codex notify outside a git repo -> exit 0 (no scan, no error)."""
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "codex"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    notify = fake_home / ".codex" / "hooks" / "codex-notify.sh"
+    # tmp_path is not a git repo.
+    proc = subprocess.run(
+        ["bash", str(notify)], cwd=tmp_path,
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_codex_notify_uses_real_pii_lint_binary(tmp_path: Path) -> None:
+    """The notify script invokes pii-lint via PATH (not -m), so verify
+    the binary is on PATH and is the one install-hooks just installed.
+
+    This protects against a future refactor that switches to
+    `python -m pii_linter` and silently breaks users on systems where
+    the console script was not symlinked (e.g. pipx --global).
+    """
+    import subprocess as sp
+
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    # Provide a fake bin dir on PATH so the script's `pii-lint` lookup
+    # is forced to use whatever `pii-lint` the test env shipped — that
+    # is the editable-install console script this repo's tests depend on.
+    sandbox_bin = tmp_path / "sandbox_bin"
+    sandbox_bin.mkdir()
+    real_pii_lint = shutil_which("pii-lint")
+    assert real_pii_lint, "test env missing pii-lint on PATH"
+    (sandbox_bin / "pii-lint").symlink_to(real_pii_lint)
+    env["PATH"] = str(sandbox_bin) + os.pathsep + env.get("PATH", "")
+    subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "codex"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    notify = fake_home / ".codex" / "hooks" / "codex-notify.sh"
+    # Confirm the script literally calls `pii-lint` (not `python -m`).
+    body = notify.read_text()
+    assert "pii-lint scan --staged" in body
+    # And run it end-to-end against a real git repo.
+    repo = _write_repo_with_files(
+        tmp_path, {"clean.csv": "name,note\nalpha,ok\n"},
+    )
+    sp.run(["git", "add", "clean.csv"], cwd=repo, check=True, capture_output=True)
+    proc = sp.run(["bash", str(notify)], cwd=repo, capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_install_hooks_preserves_existing_user_settings(tmp_path: Path) -> None:
+    """Merging must not clobber unrelated keys in an existing settings.json.
+
+    Reproduce a realistic case: the user already has a UserPromptSubmit
+    hook, then they run `pii-lint install-hooks claude-code`. The new
+    PreToolUse/PostToolUse/Stop hooks must be added; the pre-existing
+    UserPromptSubmit must survive.
+    """
+    import json as _json
+    fake_home = tmp_path / "home"
+    env = os.environ.copy()
+    env["HOME"] = str(fake_home)
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    settings = fake_home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    existing = {
+        "permissions": {"allow": ["Bash(npm:*)"]},
+        "hooks": {
+            "UserPromptSubmit": [
+                {"matcher": "", "hooks": [{"type": "command", "command": "echo hi"}]}
+            ]
+        },
+    }
+    settings.write_text(_json.dumps(existing))
+    rc = subprocess.run(
+        [sys.executable, "-m", "pii_linter", "install-hooks", "claude-code"],
+        env=env, capture_output=True, text=True,
+    )
+    assert rc.returncode == 0, rc.stderr
+    merged = _json.loads(settings.read_text())
+    # Pre-existing keys preserved.
+    assert merged["permissions"] == {"allow": ["Bash(npm:*)"]}
+    assert "UserPromptSubmit" in merged["hooks"]
+    # New keys added.
+    assert "PreToolUse" in merged["hooks"]
+    assert "PostToolUse" in merged["hooks"]
+    assert "Stop" in merged["hooks"]
+
+
 def shutil_which(name: str) -> str | None:
     """Local helper: avoid importing shutil just for `which` in one test."""
     from shutil import which
