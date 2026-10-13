@@ -774,7 +774,7 @@ def _write_repo_with_files(tmp_path: Path, files: dict[str, str]) -> Path:
     return repo
 
 
-def test_claude_pretooluse_blocks_pii_in_new_file_write(tmp_path: Path) -> None:
+def test_claude_pretooluse_blocks_pii_in_new_file_write(tmp_path: Path, pii_lint_on_path) -> None:
     """Simulate Claude Code calling PreToolUse for a Write tool call.
 
     Claude sends a JSON blob on stdin like:
@@ -824,7 +824,7 @@ def test_claude_pretooluse_blocks_pii_in_new_file_write(tmp_path: Path) -> None:
     assert target_csv in proc.stderr
 
 
-def test_claude_pretooluse_passes_clean_csv(tmp_path: Path) -> None:
+def test_claude_pretooluse_passes_clean_csv(tmp_path: Path, pii_lint_on_path) -> None:
     """Same harness, but the Write content has no PII -> exit 0."""
     import json as _json
     import subprocess as sp
@@ -857,7 +857,7 @@ def test_claude_pretooluse_passes_clean_csv(tmp_path: Path) -> None:
     )
 
 
-def test_claude_pretooluse_skips_non_pii_extensions(tmp_path: Path) -> None:
+def test_claude_pretooluse_skips_non_pii_extensions(tmp_path: Path, pii_lint_on_path) -> None:
     """PreToolUse should be a no-op for .py/.js/etc — those are out of scope."""
     import json as _json
     import subprocess as sp
@@ -888,7 +888,7 @@ def test_claude_pretooluse_skips_non_pii_extensions(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
 
 
-def test_claude_pretooluse_blocks_existing_csv_via_edit(tmp_path: Path) -> None:
+def test_claude_pretooluse_blocks_existing_csv_via_edit(tmp_path: Path, pii_lint_on_path) -> None:
     """Edit tool on an existing CSV: scan the file on disk, block on PII."""
     import json as _json
     import subprocess as sp
@@ -922,7 +922,7 @@ def test_claude_pretooluse_blocks_existing_csv_via_edit(tmp_path: Path) -> None:
     assert str(target) in proc.stderr
 
 
-def test_claude_posttooluse_blocks_via_environment_variable(tmp_path: Path) -> None:
+def test_claude_posttooluse_blocks_via_environment_variable(tmp_path: Path, pii_lint_on_path) -> None:
     """PostToolUse command string uses $CLAUDE_TOOL_FILE_PATH.
 
     The PostToolUse command lives in settings.json as a shell snippet.
@@ -962,7 +962,7 @@ def test_claude_posttooluse_blocks_via_environment_variable(tmp_path: Path) -> N
     )
 
 
-def test_codex_notify_blocks_pii_in_staged_diff(tmp_path: Path) -> None:
+def test_codex_notify_blocks_pii_in_staged_diff(tmp_path: Path, pii_lint_on_path) -> None:
     """Codex notify: a real git repo with PII staged -> exit 2."""
     import subprocess as sp
 
@@ -998,7 +998,7 @@ def test_codex_notify_blocks_pii_in_staged_diff(tmp_path: Path) -> None:
     assert "pii" in combined or "high" in combined or "critical" in combined
 
 
-def test_codex_notify_passes_clean_staged_diff(tmp_path: Path) -> None:
+def test_codex_notify_passes_clean_staged_diff(tmp_path: Path, pii_lint_on_path) -> None:
     """Codex notify: clean staged diff -> exit 0."""
     import subprocess as sp
 
@@ -1043,7 +1043,7 @@ def test_codex_notify_is_noop_outside_git_repo(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
 
 
-def test_codex_notify_uses_real_pii_lint_binary(tmp_path: Path) -> None:
+def test_codex_notify_uses_real_pii_lint_binary(tmp_path: Path, pii_lint_on_path) -> None:
     """The notify script invokes pii-lint via PATH (not -m), so verify
     the binary is on PATH and is the one install-hooks just installed.
 
@@ -1065,7 +1065,19 @@ def test_codex_notify_uses_real_pii_lint_binary(tmp_path: Path) -> None:
     sandbox_bin.mkdir()
     real_pii_lint = shutil_which("pii-lint")
     assert real_pii_lint, "test env missing pii-lint on PATH"
-    (sandbox_bin / "pii-lint").symlink_to(real_pii_lint)
+    # Symlink the console script on PATH so the agent hooks' bare
+    # `pii-lint` lookup resolves to it, but wrap it in a tiny shim
+    # that injects the user-site-packages path the editable install
+    # registered. Without this, the shebang in the console script
+    # points at /usr/bin/python3, which has no `pii_linter` importable
+    # and the hooks fail with `ModuleNotFoundError`.
+    wrapper = sandbox_bin / "pii-lint"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f'exec /usr/bin/env PYTHONPATH="{Path(__file__).resolve().parent.parent}" '
+        f'"{real_pii_lint}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
     env["PATH"] = str(sandbox_bin) + os.pathsep + env.get("PATH", "")
     subprocess.run(
         [sys.executable, "-m", "pii_linter", "install-hooks", "codex"],
