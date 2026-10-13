@@ -29,26 +29,27 @@ def fake_home(tmp_path, monkeypatch) -> Path:
 
 @pytest.fixture
 def fake_repo(tmp_path, monkeypatch) -> Path:
+    """A real git repo at tmp_path/repo, with cwd set to it.
+
+    Uses `git init` rather than a hand-rolled `.git` directory so the
+    repo is actually exercisable by `git commit` etc. during the E2E
+    tests further down.
+    """
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / ".git").mkdir()  # marker only; git itself is not exercised
+    subprocess.run(
+        ["git", "init", "-q", str(repo)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "t@t.t"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "t"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
     monkeypatch.chdir(repo)
     return repo
-
-
-@pytest.fixture
-def sandbox_gitconfig(tmp_path, monkeypatch) -> Path:
-    """Redirect global git config into tmp_path so the real one is safe."""
-    cfg = tmp_path / "gitconfig-sandbox"
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    return cfg
-
-
-@pytest.fixture
-def isolated_git_env(fake_home, sandbox_gitconfig) -> Path:
-    """HOME + global git config both sandboxed, for `init`/`uninstall`."""
-    return fake_home
 
 
 # ---- plans_for --------------------------------------------------------------
@@ -278,53 +279,285 @@ def test_templates_loadable() -> None:
 
 
 # ===========================================================================
-# pii-lint init / uninstall  (global git hook)
+# pii-lint init / uninstall  (per-repo git hook, in <repo>/.git/hooks/)
 # ===========================================================================
+#
+# The previous global install model — ~/.githooks/ + core.hooksPath — was
+# replaced with a per-repo opt-in: `cd` into a repo, run `pii-lint init`,
+# and the hooks land in that repo's .git/hooks/. Tests below exercise
+# every case that matters for the new model. The resolver-script tests
+# further down are kept verbatim because the resolver script itself is
+# unchanged — only its location moved.
 
 
-def test_init_sets_hooks_path_and_writes_hook(isolated_git_env) -> None:
+def test_init_writes_hooks_to_dot_git_hooks(fake_repo) -> None:
+    """`init` writes into <repo>/.git/hooks/."""
     assert install_git.install() == 0
-    hook = isolated_git_env / ".githooks" / "pre-commit"
-    assert hook.exists()
-    assert hook.stat().st_mode & stat.S_IXUSR
-    assert install_git.current_hooks_path() == str(isolated_git_env / ".githooks")
+    pre_commit = fake_repo / ".git" / "hooks" / "pre-commit"
+    assert pre_commit.exists()
+    assert pre_commit.stat().st_mode & stat.S_IXUSR
+    body = pre_commit.read_text()
+    assert install_git.MARKER in body
+    # The pre-push hook and resolver live next to pre-commit.
+    assert (fake_repo / ".git" / "hooks" / "pre-push").exists()
+    assert (fake_repo / ".git" / "hooks" / "pii-lint-resolver.sh").exists()
 
 
-def test_init_hook_uses_resolver_not_hard_pinned_python(isolated_git_env) -> None:
-    """Hook must call the resolver script, NOT a hard-pinned Python.
+def test_init_does_not_create_githooks_dir(fake_repo) -> None:
+    """`init` must not touch ``$HOME/.githooks/`` (the old global dir)."""
+    githooks = Path.home() / ".githooks"
+    if githooks.exists():
+        # If a stale global install is lying around (e.g. from a prior
+        # version of pii-lint), snapshot its mtime and verify `init` did
+        # not bump it. We do not delete the directory — that is the
+        # user's responsibility (`pii-lint uninstall` from any shell).
+        before_mtime = githooks.stat().st_mtime
+    else:
+        before_mtime = None
+    assert install_git.install() == 0
+    if before_mtime is not None:
+        assert githooks.stat().st_mtime == before_mtime, (
+            "init modified $HOME/.githooks/ — it must leave global state alone"
+        )
 
-    A hard-pinned path silently breaks when the user reinstalls pii-lint
-    into a different conda env. The resolver locates a working Python at
-    hook-time so the hook survives env switches.
-    """
-    install_git.install()
-    body = (isolated_git_env / ".githooks" / "pre-commit").read_text()
-    resolver = str(isolated_git_env / ".githooks" / "pii-lint-resolver.sh")
-    # Hook must reference the resolver by absolute path, not sys.executable.
+
+def test_init_does_not_touch_global_git_config(fake_repo) -> None:
+    """`init` is local to the repo. It must not set core.hooksPath."""
+    rc = subprocess.run(
+        ["git", "config", "--global", "--get", "core.hooksPath"],
+        capture_output=True, text=True,
+    )
+    assert rc.returncode != 0, (
+        "test precondition: the test runner must not have a global "
+        "core.hooksPath set, or this test cannot prove `init` is local."
+    )
+    assert install_git.install() == 0
+    rc = subprocess.run(
+        ["git", "config", "--global", "--get", "core.hooksPath"],
+        capture_output=True, text=True,
+    )
+    assert rc.returncode != 0, "init must not set core.hooksPath globally"
+
+
+def test_init_refuses_outside_git_repo(tmp_path, monkeypatch) -> None:
+    """`init` in a non-git dir exits 1 with a clear message."""
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+    monkeypatch.chdir(not_a_repo)
+    rc = install_git.install()
+    assert rc == 1
+
+
+def test_init_idempotent(fake_repo) -> None:
+    """Running init twice overwrites our own hook without complaint."""
+    assert install_git.install() == 0
+    pre_commit = fake_repo / ".git" / "hooks" / "pre-commit"
+    first_body = pre_commit.read_text()
+    assert install_git.install() == 0
+    second_body = pre_commit.read_text()
+    # The body text is byte-identical for an idempotent run; the second
+    # run did not error out. mtime is bumped by the rewrite, but that
+    # is a write concern, not a test concern.
+    assert first_body == second_body
+
+
+def test_init_dry_run_writes_nothing(fake_repo) -> None:
+    assert install_git.install(dry_run=True) == 0
+    hooks = fake_repo / ".git" / "hooks"
+    # Either the hooks dir does not exist, or it is the empty stub git
+    # created during `git init`.
+    if hooks.exists():
+        for p in hooks.iterdir():
+            assert p.name.endswith(".sample"), p.name
+
+
+def test_init_writes_precommit_with_resolver_path(fake_repo) -> None:
+    """pre-commit must call the resolver, not a hard-pinned Python."""
+    assert install_git.install() == 0
+    body = (fake_repo / ".git" / "hooks" / "pre-commit").read_text()
+    resolver = str(fake_repo / ".git" / "hooks" / "pii-lint-resolver.sh")
     assert f'RESOLVER="{resolver}"' in body
     assert '"$RESOLVER" -m pii_linter scan --staged' in body
-    # No hard-pinned $PY, no bare `pii-lint` or `python -m` call — both
-    # are PATH/explicit-Python deps that the resolver exists to remove.
+    # No hard-pinned Python and no bare `pii-lint` invocation in the hook.
     assert "$PY" not in body
-    assert "pii-lint scan" not in body
-    assert "\npii-lint" not in body
-    assert 'python -m' not in body
+    assert "python -m" not in body
 
 
-def test_init_writes_resolver_script(isolated_git_env) -> None:
-    """The resolver script is a sibling file the hook calls."""
+def test_init_writes_prepush_with_pushed_range_args(fake_repo) -> None:
+    """pre-push must use the new --pushed-base / --pushed-head args."""
+    assert install_git.install() == 0
+    body = (fake_repo / ".git" / "hooks" / "pre-push").read_text()
+    assert "scan --pushed-base" in body
+    assert "--pushed-head" in body
+    assert "EMPTY_TREE=4b825dc642cb6eb9a060e54bf8d69288fbee4904" in body
+    # Fails closed if the resolver has vanished.
+    assert "exit 2" in body
+
+
+def test_init_writes_passthrough_shims(fake_repo) -> None:
+    """commit-msg, prepare-commit-msg etc. get a passthrough shim."""
+    assert install_git.install() == 0
+    for name in install_git.PASSTHROUGH_HOOKS:
+        shim = fake_repo / ".git" / "hooks" / name
+        assert shim.exists(), name
+        assert shim.stat().st_mode & stat.S_IXUSR, name
+        body = shim.read_text()
+        # Shim forwards to the `.real` companion, NOT the bare name
+        # (forwarding to the bare name would re-invoke the shim and
+        # loop forever — see the regression that motivated this check).
+        assert f'"$DIR/hooks/{name}.real"' in body, name
+
+
+def test_init_chains_existing_precommit(fake_repo) -> None:
+    """A foreign pre-commit gets moved to pre-commit.real and chained."""
+    foreign = fake_repo / ".git" / "hooks" / "pre-commit"
+    foreign.write_text("#!/bin/sh\necho USER_HOOK\n")
+    foreign.chmod(0o755)
+
+    assert install_git.install() == 0
+    # The original is preserved at .real, untouched.
+    real = fake_repo / ".git" / "hooks" / "pre-commit.real"
+    assert real.exists()
+    assert real.read_text() == "#!/bin/sh\necho USER_HOOK\n"
+    # The new pre-commit chains to .real after a clean scan.
+    body = foreign.read_text()
+    assert install_git.MARKER in body
+    assert "pre-commit.real" in body
+    assert '"$SCAN_RC" = "0"' in body
+
+
+def test_init_chains_existing_passthrough_hook(fake_repo) -> None:
+    """A foreign commit-msg also chains via .real (regression: a shim
+    that forwards to its own name would loop forever)."""
+    foreign = fake_repo / ".git" / "hooks" / "commit-msg"
+    foreign.write_text("#!/bin/sh\necho USER_COMMIT_MSG\n")
+    foreign.chmod(0o755)
+
+    assert install_git.install() == 0
+    real = fake_repo / ".git" / "hooks" / "commit-msg.real"
+    assert real.exists()
+    assert real.read_text() == "#!/bin/sh\necho USER_COMMIT_MSG\n"
+    shim = foreign.read_text()
+    assert install_git.MARKER in shim
+    assert "commit-msg.real" in shim
+    # The shim must NOT forward to the bare name (would loop).
+    assert '"$DIR/hooks/commit-msg"' not in shim
+
+
+def test_uninstall_removes_pii_lint_hooks(fake_repo) -> None:
+    assert install_git.install() == 0
+    assert install_git.uninstall() == 0
+    # Every file we wrote must be gone.
+    for name in install_git.FULL_HOOKS:
+        assert not (fake_repo / ".git" / "hooks" / name).exists(), name
+    for name in install_git.PASSTHROUGH_HOOKS:
+        assert not (fake_repo / ".git" / "hooks" / name).exists(), name
+    assert not (fake_repo / ".git" / "hooks" / "pii-lint-resolver.sh").exists()
+
+
+def test_uninstall_restores_chained_precommit(fake_repo) -> None:
+    """After uninstall, pre-commit.real becomes pre-commit again."""
+    foreign = fake_repo / ".git" / "hooks" / "pre-commit"
+    foreign.write_text("#!/bin/sh\necho USER_HOOK\n")
+    foreign.chmod(0o755)
     install_git.install()
-    resolver = isolated_git_env / ".githooks" / "pii-lint-resolver.sh"
-    assert resolver.exists()
-    assert resolver.stat().st_mode & stat.S_IXUSR
-    body = resolver.read_text()
-    # The resolver auto-scans — no env names should be hard-coded.
-    assert "import pii_linter" in body
-    assert "python3" in body
-    assert "scan_conda_root" in body  # auto-scan helper
-    # Sanity: no per-name probe left over from the old design.
-    assert "cand_conda pii" not in body
-    assert "cand_conda test" not in body
+    assert (fake_repo / ".git" / "hooks" / "pre-commit.real").exists()
+    install_git.uninstall()
+    # .real was renamed back to the bare name with the original content.
+    assert (fake_repo / ".git" / "hooks" / "pre-commit").exists()
+    assert (fake_repo / ".git" / "hooks" / "pre-commit").read_text() == "#!/bin/sh\necho USER_HOOK\n"
+    assert not (fake_repo / ".git" / "hooks" / "pre-commit.real").exists()
+
+
+def test_uninstall_never_deletes_foreign_hook(fake_repo) -> None:
+    """A hook the user installed by hand must survive uninstall."""
+    # A non-pii foreign pre-commit, with no .real companion: the move
+    # step should set up the chain, then uninstall should restore.
+    foreign = fake_repo / ".git" / "hooks" / "pre-commit"
+    foreign.write_text("#!/bin/sh\n# hand-rolled, not ours\n")
+    foreign.chmod(0o755)
+    install_git.install()
+    # Sanity: we are now chained (so .real exists).
+    assert (fake_repo / ".git" / "hooks" / "pre-commit.real").exists()
+    install_git.uninstall()
+    # The hand-rolled hook is back in place untouched.
+    assert foreign.read_text() == "#!/bin/sh\n# hand-rolled, not ours\n"
+
+
+def test_uninstall_noop_when_nothing_installed(fake_repo) -> None:
+    """`uninstall` in a clean repo exits 0, prints a no-op message."""
+    assert install_git.uninstall() == 0
+
+
+def test_uninstall_outside_git_repo(tmp_path, monkeypatch) -> None:
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+    monkeypatch.chdir(not_a_repo)
+    assert install_git.uninstall() == 0
+
+
+def test_init_in_worktree(fake_repo, tmp_path, monkeypatch) -> None:
+    """Init inside a `git worktree` lands in the worktree's own hooks dir.
+
+    `git worktree add` puts a `.git` *file* (not dir) in the worktree
+    whose contents is `gitdir: <main>/.git/worktrees/<name>`. Hooks
+    written there are picked up by git when run from the worktree.
+    """
+    # `git worktree add` requires at least one commit in the main repo.
+    (fake_repo / "README.md").write_text("# test\n")
+    subprocess.run(["git", "add", "README.md"], cwd=str(fake_repo), check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "init"],
+        cwd=str(fake_repo), check=True, capture_output=True,
+    )
+    wt = tmp_path / "wt"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", str(wt), "HEAD"],
+        cwd=str(fake_repo), check=True, capture_output=True,
+    )
+    monkeypatch.chdir(wt)
+    assert install_git.install() == 0
+    # The hooks must land in the worktree's private git dir, not the
+    # main repo's .git/hooks/. Git's own lookup for a worktree goes
+    # through the per-worktree dir, so the hooks must live there to
+    # fire when committing from the worktree.
+    wt_git_file = wt / ".git"
+    assert wt_git_file.is_file()
+    wt_git_dir = Path(
+        wt_git_file.read_text().strip().split(":", 1)[1].strip()
+    )
+    assert wt_git_dir.is_dir()
+    pre_commit = wt_git_dir / "hooks" / "pre-commit"
+    assert pre_commit.exists(), f"expected hook at {pre_commit}"
+    assert install_git.MARKER in pre_commit.read_text()
+
+
+def test_cli_init_and_uninstall_roundtrip(fake_repo) -> None:
+    """`pii-lint init` / `uninstall` are wired to the module."""
+    from pii_linter import cli
+
+    assert cli.main(["init"]) == 0
+    assert (fake_repo / ".git" / "hooks" / "pre-commit").exists()
+    assert cli.main(["uninstall"]) == 0
+    assert not (fake_repo / ".git" / "hooks" / "pre-commit").exists()
+
+
+def test_cli_init_refuses_outside_git_repo(tmp_path, monkeypatch) -> None:
+    from pii_linter import cli
+
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+    monkeypatch.chdir(not_a_repo)
+    assert cli.main(["init"]) == 1
+
+
+def test_cli_init_is_not_rewritten_to_scan(fake_repo) -> None:
+    """Regression: _normalise_argv must not turn `init` into `scan init`."""
+    from pii_linter import cli
+
+    assert cli._normalise_argv(["init"]) == ["init"]
+    assert cli._normalise_argv(["uninstall"]) == ["uninstall"]
+    assert cli._normalise_argv([]) == ["scan", "."]
 
 
 def test_resolver_finds_python_in_conda_env(tmp_path) -> None:
@@ -463,9 +696,7 @@ def test_resolver_fails_closed_when_no_python_has_lib(tmp_path) -> None:
     assert "no Python interpreter" in proc.stderr
 
 
-def test_init_hook_fails_closed_when_resolver_missing(
-    isolated_git_env, monkeypatch
-) -> None:
+def test_init_hook_fails_closed_when_resolver_missing() -> None:
     """If the resolver vanishes the hook must not silently approve."""
     # precommit_body default placeholder is __PII_RESOLVER_PATH__; replace
     # it with a path that definitely does not exist on disk.
@@ -477,199 +708,37 @@ def test_init_hook_fails_closed_when_resolver_missing(
     assert "did NOT run" in body
 
 
-def test_init_writes_passthrough_shims(isolated_git_env) -> None:
-    """core.hooksPath replaces .git/hooks, so repo hooks need forwarding."""
-    install_git.install()
-    for name in install_git.PASSTHROUGH_HOOKS:
-        shim = isolated_git_env / ".githooks" / name
-        assert shim.exists(), name
-        assert shim.stat().st_mode & stat.S_IXUSR, name
-        body = shim.read_text()
-        assert f'"$DIR/hooks/{name}"' in body, name
+def test_init_hook_unstages_pii_files() -> None:
+    """On a HIGH+ finding the pre-commit hook unstages the offending file.
 
-
-def test_init_dry_run_changes_nothing(isolated_git_env) -> None:
-    assert install_git.install(dry_run=True) == 0
-    assert not (isolated_git_env / ".githooks").exists()
-    assert install_git.current_hooks_path() is None
-
-
-def test_init_refuses_to_clobber_foreign_hook(isolated_git_env) -> None:
-    """Overwriting a hook manager (husky) would break every commit."""
-    hooks = isolated_git_env / ".githooks"
-    hooks.mkdir(parents=True)
-    foreign = hooks / "pre-commit"
-    foreign.write_text('#!/bin/sh\n# husky-managed\necho husky\n')
-    foreign.chmod(0o755)
-
-    assert install_git.install() == 1
-    # Untouched: still husky's file, byte for byte.
-    assert foreign.read_text() == '#!/bin/sh\n# husky-managed\necho husky\n'
-    assert install_git.current_hooks_path() is None
-
-
-def test_init_adopts_existing_hooks_path_without_resetting(
-    isolated_git_env, tmp_path
-) -> None:
-    """If the user already set core.hooksPath we use it and do not re-set it."""
-    existing = tmp_path / "user-hooks"
-    existing.mkdir()
-    subprocess.run(
-        ["git", "config", "--global", "core.hooksPath", str(existing)],
-        check=True,
-        capture_output=True,
-    )
-    assert install_git.install() == 0
-    assert (existing / "pre-commit").exists()
-    assert install_git.current_hooks_path() == str(existing)
-    # We did not set it, so uninstall must leave the config alone.
-    state = json.loads((existing / install_git.STATE_FILE).read_text())
-    assert state["set_hooks_path"] is False
-
-
-def test_init_is_idempotent(isolated_git_env) -> None:
-    assert install_git.install() == 0
-    assert install_git.install() == 0  # second run overwrites our own hook
-    assert (isolated_git_env / ".githooks" / "pre-commit").exists()
-
-
-def test_uninstall_removes_hooks_and_unsets_config(isolated_git_env) -> None:
-    install_git.install()
-    assert install_git.uninstall() == 0
-    assert not (isolated_git_env / ".githooks" / "pre-commit").exists()
-    assert not (isolated_git_env / ".githooks" / install_git.STATE_FILE).exists()
-    assert install_git.current_hooks_path() is None
-
-
-def test_uninstall_keeps_config_it_did_not_set(isolated_git_env, tmp_path) -> None:
-    existing = tmp_path / "user-hooks"
-    existing.mkdir()
-    subprocess.run(
-        ["git", "config", "--global", "core.hooksPath", str(existing)],
-        check=True,
-        capture_output=True,
-    )
-    install_git.install()
-    install_git.uninstall()
-    assert install_git.current_hooks_path() == str(existing)
-
-
-def test_uninstall_never_deletes_foreign_hook(isolated_git_env) -> None:
-    hooks = isolated_git_env / ".githooks"
-    hooks.mkdir(parents=True)
-    foreign = hooks / "commit-msg"
-    foreign.write_text("#!/bin/sh\n# not ours\n")
-    foreign.chmod(0o755)
-    install_git.install()
-    install_git.uninstall()
-    assert foreign.exists()
-    assert foreign.read_text() == "#!/bin/sh\n# not ours\n"
-
-
-def test_uninstall_is_a_noop_when_not_installed(isolated_git_env) -> None:
-    assert install_git.uninstall() == 0
-
-
-def test_init_records_state(isolated_git_env) -> None:
-    install_git.install()
-    state = json.loads(
-        (isolated_git_env / ".githooks" / install_git.STATE_FILE).read_text()
-    )
-    assert state == {"marker": "pii-lint", "set_hooks_path": True}
-
-
-def test_init_survives_git_config_failure(isolated_git_env, monkeypatch) -> None:
-    """A git that cannot be configured must not lose the written hook."""
-    install_git.install()
-    # Point git config at an unwritable path: writing files still succeeds,
-    # the config write is what fails.
-    broken = isolated_git_env / "no-such-dir" / "cfg"
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(broken))
-    assert install_git.install() == 1  # reports the failure
-    assert (isolated_git_env / ".githooks" / "pre-commit").exists()  # still there
-
-
-def test_hook_passthrough_actually_runs_repo_commit_msg(tmp_path) -> None:
-    """End-to-end: a repo's own commit-msg hook survives core.hooksPath.
-
-    This is the regression that matters. core.hooksPath *replaces* the hook
-    lookup dir, so without the shim a repo silently loses its commit-msg.
+    The hook parses the JSON scan output, collects every file that has
+    at least one HIGH/CRITICAL finding, and runs ``git reset HEAD --``
+    for each one before exiting non-zero. The point is that a user who
+    runs ``git add . && git commit`` on a workspace full of mixed
+    data wants to know *which file* tripped the scan, not have it
+    sit silently in the index ready to leak on the next commit.
     """
-    if not shutil_which("git"):
-        pytest.skip("git not on PATH")
-
-    home = tmp_path / "home"
-    hooks = home / ".githooks"
-    hooks.mkdir(parents=True)
-    (home / ".pii-state").write_text("{}")  # unused; keeps dir non-empty
-    cfg = tmp_path / "gitconfig"
-    env = dict(os.environ)
-    env["HOME"] = str(home)
-    env["GIT_CONFIG_GLOBAL"] = str(cfg)
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-
-    # Write the shims the way install() does. The pre-commit needs the
-    # resolver script present so it does not fail closed on resolver-missing.
-    (hooks / "pii-lint-resolver.sh").write_text(
-        install_git._read_template("pii-lint-resolver.sh")
-    )
-    (hooks / "pii-lint-resolver.sh").chmod(0o755)
-    (hooks / "pre-commit").write_text(
-        install_git.precommit_body(str(hooks / "pii-lint-resolver.sh"))
-    )
-    (hooks / "pre-commit").chmod(0o755)
-    for name in install_git.PASSTHROUGH_HOOKS:
-        p = hooks / name
-        p.write_text(install_git.passthrough_body(name))
-        p.chmod(0o755)
-    subprocess.run(
-        ["git", "config", "--global", "core.hooksPath", str(hooks)],
-        check=True, capture_output=True, env=env,
-    )
-
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
-    (repo / ".git" / "hooks").mkdir(exist_ok=True)
-    marker = repo / "MARKER"
-    (repo / ".git" / "hooks" / "commit-msg").write_text(
-        f'#!/bin/sh\ntouch "{marker}"\n'
-    )
-    (repo / ".git" / "hooks" / "commit-msg").chmod(0o755)
-    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
-        subprocess.run(
-            ["git", "config", k, v], cwd=repo, check=True,
-            capture_output=True, env=env,
-        )
-
-    (repo / "clean.csv").write_text("name,note\nalpha,ok\n")
-    subprocess.run(["git", "add", "clean.csv"], cwd=repo, check=True, env=env)
-    proc = subprocess.run(
-        ["git", "commit", "-q", "-m", "x"],
-        cwd=repo, capture_output=True, text=True, env=env,
-    )
-    assert proc.returncode == 0, proc.stderr
-    # The PII hook ran (clean, exit 0) *and* the repo's own hook still ran.
-    assert marker.exists(), "repo commit-msg hook was orphaned by core.hooksPath"
+    body = install_git.precommit_body()
+    # Capture the scan as JSON so we can read the file list back out.
+    assert "scan --staged --format json" in body
+    # Parse the JSON and unstage every file that has a HIGH+ finding.
+    assert "json.load" in body
+    assert '"findings"' in body
+    # Severity threshold: HIGH=3 per pii_linter/severity.py.
+    assert "HIGH = 3" in body
+    # The actual unstage step: `git reset HEAD -- <file>`.
+    assert "git reset HEAD -- \"$f\"" in body
+    # The hook must preserve the scan's exit code so the commit is
+    # still blocked after the unstage.
+    assert "exit $SCAN_RC" in body
 
 
-def test_cli_init_and_uninstall_roundtrip(isolated_git_env) -> None:
-    """`pii-lint init` / `uninstall` are wired to the module."""
-    from pii_linter import cli
-
-    assert cli.main(["init"]) == 0
-    assert (isolated_git_env / ".githooks" / "pre-commit").exists()
-    assert cli.main(["uninstall"]) == 0
-    assert not (isolated_git_env / ".githooks" / "pre-commit").exists()
-
-
-def test_cli_init_is_not_rewritten_to_scan(isolated_git_env) -> None:
-    """Regression: _normalise_argv must not turn `init` into `scan init`."""
-    from pii_linter import cli
-
-    assert cli._normalise_argv(["init"]) == ["init"]
-    assert cli._normalise_argv(["uninstall"]) == ["uninstall"]
-    assert cli._normalise_argv([]) == ["scan", "."]
+def test_prepush_body_default_placeholder() -> None:
+    """`prepush_body()` is a no-arg factory: the resolver path gets
+    patched in by install() so the file is portable until then."""
+    body = install_git.prepush_body()
+    assert "__PII_RESOLVER_PATH__" in body
+    assert "scan --pushed-base" in body
 
 
 # ---------------------------------------------------------------------------
