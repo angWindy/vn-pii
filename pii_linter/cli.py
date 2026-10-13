@@ -1,8 +1,8 @@
 """PII Linter CLI entrypoint.
 
 Usage:
-    pii-lint init                     # install the global git hook (one-time)
-    pii-lint uninstall                # remove it again
+    pii-lint init                     # install the hook in the current repo
+    pii-lint uninstall                # remove it from the current repo
     pii-lint [PATH]                 # same as `pii-lint scan PATH`; bare -> cwd
     pii-lint scan <path> [--format {markdown,json}] [--suppressions PATH]
     pii-lint scan --staged [--format {markdown,json}] [--suppressions PATH]
@@ -10,7 +10,9 @@ Usage:
     python -m pii_linter [PATH]      # identical to `pii-lint`
 
 The tool runs in any Python 3.11+ environment (no conda env check in
-Slice 2+).
+Slice 2+). The `init` and `uninstall` subcommands operate on the
+**current** repo's `.git/hooks/` — they do not touch `core.hooksPath`
+or anything under `$HOME`, so each repo opts in independently.
 """
 
 from __future__ import annotations
@@ -507,8 +509,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_init = sub.add_parser(
         "init",
-        help="Install the global git pre-commit hook. Once per machine; "
-             "after this, every `git commit` anywhere scans staged PII.",
+        help="Install the git pre-commit and pre-push hooks in the "
+             "current repo. Each repo you want to protect needs its "
+             "own `pii-lint init`; other repos are left alone.",
     )
     p_init.add_argument(
         "--dry-run",
@@ -519,7 +522,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_uninstall = sub.add_parser(
         "uninstall",
-        help="Remove the global git hook and restore core.hooksPath.",
+        help="Remove the git hooks from the current repo's .git/hooks/ "
+             "and restore any previously chained foreign hook.",
     )
     p_uninstall.add_argument(
         "--dry-run",
