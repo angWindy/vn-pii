@@ -1,9 +1,9 @@
 # User guide
 
 PII Linter ships as a zero-dependency Python package plus a CLI entry
-point. One command installs it and switches on a git hook that covers every
-repository on your machine — after that, a plain `git commit` blocks PII
-with no per-repo setup.
+point. Install it once (`pip install pii-linter`), then in each repo you
+want to protect run `pii-lint init`. The hook fires only for that repo —
+other repos on your machine are left alone until you opt them in too.
 
 > **Heads-up on the name.** The PyPI package name is **`pii-linter`**
 > (with the trailing `-er`). The CLI binary is **`pii-lint`** (no
@@ -36,10 +36,10 @@ pip install git+https://github.com/angWindy/vn-pii
 pii-lint init
 ```
 
-All three end with `pii-lint init`, which sets `core.hooksPath` to
-`~/.githooks/` and writes the resolver script that locates the binary
-on every commit. After that, any `git commit` in any repo on the
-machine is scanned — no per-repo setup.
+All three end with `pii-lint init`, which writes the hook into the
+current repo's `.git/hooks/`. After that, `git commit` in this repo is
+scanned. Other repos on the machine are NOT scanned — run `pii-lint
+init` inside each repo you want to protect.
 
 ### The one command
 
@@ -48,29 +48,32 @@ curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | s
 ```
 
 This picks a Python 3.11+ interpreter, installs the package with `pipx`
-(falling back to `pip`), and runs `pii-lint init` to install the global git
-hook. There is no second step and nothing to do per repo.
+(falling back to `pip`), and runs `pii-lint init` in the directory you
+were in when you ran the script. The hook fires only for that repo; to
+protect others, `cd` into each one and run `pii-lint init` again.
 
 Verify:
 
 ```bash
 python -c "import pii_linter; print(pii_linter.__version__)"   # -> 0.1.0
-git config --get core.hooksPath                               # -> ~/.githooks
 pii-lint init --dry-run                                       # what it would write
+ls .git/hooks/                                                # pre-commit is there
 ```
 
 ### Doing it in two steps
 
-Identical result, if you would rather control the install:
+`pip install` on its own does **not** enable the hook: pip has no
+post-install script mechanism (PEP 660 metadata is written but no code is
+executed), so `init` has to be invoked explicitly, and it has to be
+run **in every repo you want to protect**:
 
 ```bash
 pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
+cd ~/Dev/some-repo
+pii-lint init
+cd ../another-repo
 pii-lint init
 ```
-
-`pip install` on its own does **not** enable the hook: pip has no
-post-install script mechanism (PEP 660 metadata is written but no code is
-executed), so `init` has to be invoked explicitly.
 
 `pipx` is preferred because it keeps the tool out of your project
 environments. Any Python 3.11+ env works — a conda env, a virtualenv, or
@@ -200,25 +203,34 @@ options are to stop putting that value in version control, or to accept
 the blocked commit and re-run with `git commit --no-verify` after
 confirming the data is genuinely synthetic.
 
-## The git hook (zero-config)
+## The git hook (per-repo opt-in)
 
-`pii-lint init` installs one hook that covers **every** repo on the machine.
-Run it once, after installing the package:
+`pii-lint init` installs the hook into the **current** repo only.
+Run it inside each repo you want to protect:
 
 ```bash
+cd ~/Dev/some-repo
 pii-lint init
 ```
 
-From now on, in any repository, every `git commit` scans the staged lines.
+From now on, in this repo, every `git commit` scans the staged lines.
 **Only the lines added by your commit are scanned** — pre-existing PII in
 lines you did not touch is ignored. The commit is blocked if HIGH or
-CRITICAL findings appear.
+CRITICAL findings appear. Other repos on your machine are NOT scanned
+until you run `pii-lint init` inside them too.
 
-There is nothing to add to any repo. `init` sets `core.hooksPath` to
-`~/.githooks` and writes a `pre-commit` hook there. Because that replaces
-git's hook lookup, it also writes passthrough shims for `commit-msg`,
-`prepare-commit-msg`, `post-commit` and friends, so hooks a repo already
-had keep working.
+To enable the hook across many repos at once:
+
+```bash
+for d in ~/Dev/*/; do (cd "$d" && pii-lint init); done
+```
+
+There is nothing to add to any repo. `init` writes a `pre-commit`
+hook, a `pre-push` hook, and a `pii-lint-resolver.sh` script into the
+repo's own `.git/hooks/`. It also writes passthrough shims for
+`commit-msg`, `prepare-commit-msg`, `post-commit` and friends, so
+hooks a repo already had keep working (any foreign hook with the same
+name is moved to `<name>.real` and chained, not overwritten).
 
 Preview without touching anything, or remove it again:
 
@@ -307,8 +319,9 @@ alias aider-safe="pii-lint guard -- aider"
 
 ## Editor GUI (VSCode, Cursor)
 
-The global `pre-commit` hook fires from any `git commit` invocation
-that the OS-level `git` binary handles. In practice:
+The per-repo `pre-commit` hook fires from any `git commit` invocation
+that the OS-level `git` binary handles, **as long as the commit is
+made inside a repo where you ran `pii-lint init`**. In practice:
 
 - **VSCode Source Control** and **Cursor Git** panels *usually* shell
   out to the `git` binary, so the hook runs and the panel reports the
@@ -487,20 +500,24 @@ python3.11 -m pip install git+https://github.com/angWindy/vn-pii
 
 ### The hook does not run on commit
 
-The hook fires from the **global** install, not from a per-repo
-`.pre-commit-config.yaml`, so check these first:
+`init` writes into the **current repo's** `.git/hooks/`, not into
+`core.hooksPath` and not into `$HOME/.githooks/`. If you ran `init` in
+the wrong directory — or never ran it at all — the hook will not fire
+when you commit. Check that the hook is actually there:
 
 ```bash
-pii-lint init --dry-run     # shows the hooks dir and core.hooksPath
-git config --get core.hooksPath
+pii-lint init --dry-run   # shows what would be written in the current repo
+ls .git/hooks/            # pre-commit, pre-push, pii-lint-resolver.sh
 ```
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| No hook at all, `core.hooksPath` empty | never ran `init` | `pii-lint init` |
+| No hook at all on commit | never ran `init` in this repo | `cd` into the repo and run `pii-lint init` |
+| Hook ran in one repo but not another | `init` was only run in the first one | run `pii-lint init` in every repo you want to protect |
 | `pii-lint: resolver missing ... the PII scan did NOT run` | the resolver script got deleted; the hook can't run without it | `pii-lint init` to regenerate |
 | `pii-lint: no Python interpreter with pii_linter installed was found` | resolver ran but no conda/venv/PATH python has pii-lint installed | install pii-lint into any conda env or venv the resolver scans; or set `PII_LINT_EXTRA_PYTHONS=/abs/path/python` to point at one; or bypass once with `git commit --no-verify` |
-| `REFUSED: ... was not written by pii-lint` | husky or another manager owns that dir | merge [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) and run `pre-commit install` (see above) |
+| `REFUSED: ... was not written by pii-lint` | a foreign hook (husky, simple-git-hooks, your own) already lives at the same name in this repo's `.git/hooks/` | `pii-lint init` will move the foreign hook to `<name>.real` and chain to it; re-run `init` to accept. If you prefer the pre-commit framework, use [`examples/pre-commit-config.yaml`](../examples/pre-commit-config.yaml) instead. |
+| Hook runs but a repo's own `commit-msg` stopped | a shim or the `.real` companion was deleted by hand | `pii-lint init` rewrites the shims; if the foreign hook was deleted from `.real`, restore it from your backups and re-run `init` |
 
 ### How the resolver finds a Python
 
@@ -531,8 +548,9 @@ into it, the next commit picks up that env without `pii-lint init`.
 The same goes for any other env name under the search roots.
 
 To add a brand-new search root, edit `SEARCH_ROOTS` in
-`~/.githooks/pii-lint-resolver.sh` and re-run `pii-lint init`.
-| Hook runs but a repo's own `commit-msg` stopped | a shim was deleted by hand | `pii-lint init` rewrites the shims |
+`<repo>/.git/hooks/pii-lint-resolver.sh` (or your `~/.githooks/...`
+if you still keep a legacy global install around) and re-run
+`pii-lint init`.
 
 Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
 fix the hook right now.
@@ -545,9 +563,12 @@ with `language: python`, so it needs nothing on your `PATH`:
 pre-commit run pii-lint-staged --hook-stage pre-commit   # test without committing
 ```
 
-Note that if `core.hooksPath` is set (by `init` or by husky), the
-pre-commit framework's own `.git/hooks/pre-commit` is **not** consulted.
-That is expected: only the hooks directory git is pointed at runs.
+Note that if `core.hooksPath` is set (by husky or some other hook
+manager) git will look there instead of `<repo>/.git/hooks/`, and
+`pii-lint init`'s hooks will not run. Per-repo install cannot override
+this — that is git's own behaviour. To use PII Linter alongside such a
+manager, either unset `core.hooksPath` (and let per-repo install take
+over), or wire the PII scan into the manager's hook as a step.
 
 ### Why is the staged report different from the full report?
 

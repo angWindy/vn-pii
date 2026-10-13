@@ -11,9 +11,11 @@ email, card Luhn, VIN/plate, Zalo handle, free-text blobs) in CSV / JSONL /
 Markdown datasets. Designed to wrap both `git` (pre-commit) and AI-agent
 commands (Cursor, Aider, Claude Code).
 
-> **Status:** zero-config install. One command sets up the package *and* the
-> global git hook, so plain `git commit` blocks PII in any repo with no
-> per-repo setup. No runtime dependencies. Python 3.11+ required.
+> **Status:** zero-config install. The package installs with one command
+> (`pip install pii-linter`); `pii-lint init` then opts each repo in
+> individually. Plain `git commit` blocks PII in repos where `init`
+> was run; other repos are left alone. No runtime dependencies. Python
+> 3.11+ required.
 >
 > See [docs/spec.md](docs/spec.md) for the public API and
 > [docs/problem/PII/PII.md](docs/problem/PII/PII.md) for the original
@@ -42,9 +44,9 @@ pii-lint path/to/your/dataset
 ```
 
 The installer picks an isolated environment for you (`pipx`, else a private
-venv) and switches on the global git hook, so this is the whole setup. See
-[one command, every repo](#quick-start--one-command-every-repo) for what that
-enables.
+venv) and runs `pii-lint init` in the current directory; see
+[Quick start](#quick-start) for what that means and how to enable the
+hook in more repos.
 
 #### Upgrading an existing install
 
@@ -142,38 +144,46 @@ pytest tests/
 The optional `[dev]` extra pulls `Faker` (for the fixture generator) and
 `pytest`. They are not part of the runtime footprint.
 
-## Quick start — one command, every repo
+## Quick start — opt each repo in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
 ```
 
-That installs the package and switches on a global git hook. There is no
-per-repo step: from then on, in any repository on the machine,
+That installs the package and runs `pii-lint init` in the directory
+you were in when you ran the script. From then on, **in that repo**,
 
 ```bash
 git add data.csv && git commit -m "add Q4 rows"
 ```
 
 scans the staged lines and **blocks the commit** if it contains HIGH or
-CRITICAL PII, printing a masked report to your terminal. Nothing to run,
-nothing to configure, nothing to remember.
+CRITICAL PII, printing a masked report to your terminal. To enable the
+hook in another repo, `cd` into it and run `pii-lint init` again — or
+loop over your dev tree:
+
+```bash
+for d in ~/Dev/*/; do (cd "$d" && pii-lint init); done
+```
 
 Prefer two steps? Same result:
 
 ```bash
 pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
-pii-lint init                                          # install the global hook
+cd path/to/your/repo
+pii-lint init                                          # install the hook in THIS repo
 ```
 
 | Command | Effect |
 |---|---|
-| `pii-lint init` | install the global hook (idempotent; `--dry-run` to preview) |
-| `pii-lint uninstall` | remove it and restore your git config |
+| `pii-lint init` | install the hook in the current repo (idempotent; `--dry-run` to preview) |
+| `pii-lint uninstall` | remove it and restore any chained foreign hook |
 | `pre-commit install` | per-repo instead, if you use husky or another hook manager |
 
-If `init` refuses because another tool (husky) already owns your hooks
-directory, use the pre-commit framework per repo instead: merge
+If `init` refuses because another tool (husky) already owns the same
+file in your repo's `.git/hooks/`, it will move the foreign hook aside
+to `<name>.real` and chain to it after a clean PII scan. If you'd
+rather use the pre-commit framework per repo, merge
 `examples/pre-commit-config.yaml` into your `.pre-commit-config.yaml` and
 run `pre-commit install`. That composes with your existing hooks instead
 of competing for `core.hooksPath`. Full steps in
@@ -187,8 +197,9 @@ pii-lint guard -- aider --message "summarise repo"
 
 ## Quick start — Editor & AI agent integration
 
-The global git hook fires from any `git commit` invocation, including
-the **Source Control** panel in VSCode and the **Git** panel in Cursor
+The per-repo `pre-commit` hook fires from any `git commit` invocation
+made inside a repo where you ran `init`, including the **Source
+Control** panel in VSCode and the **Git** panel in Cursor
 *when they shell out to the git CLI*. Pure libgit2 commit paths used
 by some IDE integrations do not run hooks — for those, prefer the
 integrated terminal or use one of the AI agent hooks below.
