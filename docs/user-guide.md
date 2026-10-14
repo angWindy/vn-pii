@@ -260,6 +260,11 @@ dedicated environment for it.
 $ git add leads.csv
 $ git commit -m "Add new leads"
 
+pii-lint: HIGH/CRITICAL PII found. Unstaging from the index:
+  leads.csv
+
+pii-lint: re-run `git status` to see the remaining staged files, redact, and re-add.
+
 # PII scan report
 
 - files_scanned: 2
@@ -277,8 +282,17 @@ $ git commit -m "Add new leads"
 > **Suggestions:** Replace with dummy_<n> or redact to ***. Replace with dummy@example.com or redact local-part.
 ```
 
-The commit does not happen. Fix the line, re-stage (`git add leads.csv`),
-and commit again.
+The commit does not happen. Two things happen in order:
+
+1. **The file is un-staged** (`git reset HEAD -- leads.csv`), so the
+   offending row is no longer in the index waiting to leak on the
+   next commit. The file itself is untouched on disk.
+2. **The same Markdown report `pii-lint scan --staged` would print is
+   rendered inline** below the un-stage message, with a `file:line`
+   cursor and masked evidence, so you do not need to re-run
+   `pii-lint` to inspect the leak.
+
+Fix the line, re-stage (`git add leads.csv`), and commit again.
 
 Note that `evidence_masked` masks the whole cell, so the neighbouring
 columns are hidden too — the report never leaks the rest of the row just

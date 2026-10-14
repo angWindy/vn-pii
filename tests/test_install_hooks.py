@@ -733,6 +733,42 @@ def test_init_hook_unstages_pii_files() -> None:
     assert "exit $SCAN_RC" in body
 
 
+def test_init_hook_renders_markdown_report_in_block_message() -> None:
+    """On a HIGH+ finding the pre-commit hook also prints the same
+    Markdown report that ``pii-lint scan --staged`` would print, so
+    the user sees file:line + masked evidence inline without having
+    to re-invoke the CLI to inspect the leak.
+
+    The hook feeds the JSON scan output back into the same
+    ``render_markdown`` helper ``pii_linter.report`` exposes, so the
+    output is byte-identical to the standalone command.
+    """
+    body = install_git.precommit_body()
+    # Render via the shared helper so the formatter stays in sync.
+    assert "from pii_linter.report import render_markdown" in body
+    # Reconstruct Finding + ScanResult from the JSON, then render.
+    assert "ScanResult(" in body
+    assert "render_markdown(result)" in body
+    # The rendered report must go to stderr, not stdout, so git's
+    # commit message machinery is not corrupted.
+    assert "sys.stderr.write(render_markdown(result))" in body
+
+
+def test_init_hook_report_uses_only_masked_evidence() -> None:
+    """The report rendered in the block message must never read
+    ``evidence_raw`` — only ``evidence_masked``, which is the
+    display-safe form. Printing raw PII to the terminal would be a
+    privacy regression for a tool whose whole job is to block leaks.
+    """
+    body = install_git.precommit_body()
+    # The rebuilder must pull `evidence_masked` from JSON, never
+    # `evidence_raw`. The Finding constructor argument must be empty.
+    assert 'item.get("evidence_masked", "")' in body
+    assert 'evidence_raw=""' in body
+    # And the JSON key we read back must be the masked one.
+    assert '"evidence_masked"' in body
+
+
 def test_prepush_body_default_placeholder() -> None:
     """`prepush_body()` is a no-arg factory: the resolver path gets
     patched in by install() so the file is portable until then."""
@@ -1134,6 +1170,66 @@ def test_install_hooks_preserves_existing_user_settings(tmp_path: Path) -> None:
     assert "PreToolUse" in merged["hooks"]
     assert "PostToolUse" in merged["hooks"]
     assert "Stop" in merged["hooks"]
+
+
+def test_precommit_hook_prints_markdown_report_in_block_message(
+    tmp_path: Path, pii_lint_on_path, monkeypatch
+) -> None:
+    """End-to-end: a planted PHONE in a staged CSV triggers the
+    pre-commit hook, the hook un-stages the file, and the same
+    Markdown report `pii-lint scan --staged` would print is rendered
+    inline in stderr. The user gets file:line + masked evidence in
+    the block message, with no need to re-invoke the CLI.
+
+    This is the regression guard for the "show report without
+    re-running pii-lint" UX requirement.
+    """
+    # Set up a real git repo with pii-lint pre-commit installed.
+    # `install_git.install()` reads `Path.cwd()`, so we have to
+    # chdir into the repo before calling it.
+    repo = _write_repo_with_files(
+        tmp_path,
+        {"clean.csv": "name,note\nalpha,ok\n"},
+    )
+    # _write_repo_with_files disables the in-repo hook by pinning
+    # `core.hooksPath=/dev/null` for the duration of agent-hook
+    # tests. Undo that so the pre-commit we install is the one
+    # under test.
+    subprocess.run(
+        ["git", "config", "--unset", "core.hooksPath"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    monkeypatch.chdir(repo)
+    assert install_git.install() == 0
+    # Plant a phone number in a new staged file and try to commit.
+    (repo / "leak.csv").write_text("name,phone\neve,0912345678\n", encoding="utf-8")
+    subprocess.run(["git", "add", "leak.csv"], cwd=repo, check=True)
+    proc = subprocess.run(
+        ["git", "commit", "-m", "plant"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    # Commit is blocked, exit non-zero, file un-staged.
+    assert proc.returncode != 0, (
+        f"expected commit to be blocked, got rc={proc.returncode}\n"
+        f"stdout: {proc.stdout!r}\nstderr: {proc.stderr!r}"
+    )
+    staged_after = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert staged_after == "", f"expected un-staged, got: {staged_after!r}"
+    # The Markdown report rendered by `pii-lint scan --staged` shows
+    # the same header; assert it appears in the hook's stderr so the
+    # user sees it inline.
+    combined = proc.stdout + proc.stderr
+    assert "# PII scan report" in combined, (
+        f"expected in-line markdown report, got:\n{combined!r}"
+    )
+    # And the per-file heading for the planted file.
+    assert "leak.csv" in combined
+    # Phone entity label, plus a masked phone fragment (only the
+    # middle 4 digits are dropped — we just check the prefix is masked).
+    assert "PHONE" in combined
 
 
 def shutil_which(name: str) -> str | None:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from pii_linter.cli import scan_path, scan_staged
+from pii_linter.cli import scan_path, scan_staged, scan_pushed
 
 
 FIX_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
@@ -107,6 +107,53 @@ def test_staged_scan_passes_on_clean(tmp_path: Path) -> None:
 
     result = scan_staged(cwd=tmp_path)
     assert result.findings == []
+
+
+def test_pushed_scan_blocks_on_planted_phone(tmp_path: Path) -> None:
+    """`scan_pushed` over a commit range flags PII in the new lines.
+
+    Mirrors the staged-scan test but commits the file first, then
+    scans the range base..head. Catches the case where pre-commit was
+    bypassed (Cursor override) and a leak reached the local history.
+    """
+    if not shutil.which("git"):
+        pytest.skip("git is not on PATH; cannot exercise --pushed mode")
+    planted = FIX_ROOT / "gold" / "leads_50.csv"
+    _make_git_repo(tmp_path, planted)
+    sha1 = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(tmp_path), check=True, capture_output=True, text=True
+    ).stdout.strip()
+    # Append a new line with raw PII and commit it.
+    with (tmp_path / "leads.csv").open("a", encoding="utf-8") as fh:
+        fh.write("planted,0123456789,foo@bar.com\n")
+    subprocess.run(["git", "add", "leads.csv"], cwd=str(tmp_path), check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "planted PII"],
+        cwd=str(tmp_path), check=True, capture_output=True,
+    )
+    sha2 = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(tmp_path), check=True, capture_output=True, text=True
+    ).stdout.strip()
+    assert sha1 != sha2
+
+    result = scan_pushed(sha1, sha2, cwd=tmp_path)
+    assert result.files_scanned >= 1
+    assert any(f.entity == "PHONE" for f in result.findings)
+
+
+def test_pushed_scan_handles_new_branch_with_zeros(tmp_path: Path) -> None:
+    """All-zeros base SHA is the new-branch case; scan must work."""
+    if not shutil.which("git"):
+        pytest.skip("git is not on PATH; cannot exercise --pushed mode")
+    planted = FIX_ROOT / "gold" / "leads_50.csv"
+    _make_git_repo(tmp_path, planted)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(tmp_path), check=True, capture_output=True, text=True
+    ).stdout.strip()
+    zeros = "0" * 40
+    # All-zeros base: every line in `head` is "added".
+    result = scan_pushed(zeros, head, cwd=tmp_path)
+    assert any(f.entity == "PHONE" for f in result.findings)
 
 
 def test_cli_scan_staged_exit_code_1(tmp_path: Path) -> None:

@@ -74,6 +74,7 @@ class ScanResult:
 _LAZY_EXPORTS = {
     "scan": ("pii_linter.cli", "scan_path"),
     "scan_staged": ("pii_linter.cli", "scan_staged"),
+    "scan_pushed": ("pii_linter.cli", "scan_pushed"),
 }
 
 __all__ = [
@@ -83,6 +84,7 @@ __all__ = [
     "TARGET_EXTS",
     "scan",
     "scan_staged",
+    "scan_pushed",
 ]
 
 

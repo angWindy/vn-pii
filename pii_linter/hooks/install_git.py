@@ -216,6 +216,42 @@ if [ -n "$LEAKED_FILES" ]; then
     done
     echo >&2
     echo "{MARKER}: re-run \\`git status\\` to see the remaining staged files, redact, and re-add." >&2
+    # Render the same Markdown report `pii-lint scan --staged` would
+    # print, so the user sees file:line + masked evidence inline
+    # instead of having to re-invoke the CLI to inspect the leak.
+    # We feed the JSON back into the same `render_markdown` helper
+    # that `pii-lint scan` uses, so the output is byte-identical to
+    # what the standalone command would have produced. Evidence is
+    # always already masked — the raw PAN/phone never leaves Python.
+    printf '%s' "$JSON" | python3 -c '
+import json, sys
+from pii_linter import Finding, ScanResult
+from pii_linter.report import render_markdown
+data = json.load(sys.stdin)
+
+def _to_finding(item):
+    return Finding(
+        entity=item["entity"],
+        severity=item["severity"],
+        evidence_raw="",
+        evidence_masked=item.get("evidence_masked", ""),
+        span=tuple(item["span"]) if item.get("span") else None,
+        file=item.get("file") or "",
+        line_no=item.get("line_no") or 0,
+    )
+
+items = data.get("findings", [])
+findings = []
+for it in items:
+    findings.append(_to_finding(it))
+by_file = dict()
+for finding in findings:
+    if finding.file:
+        by_file.setdefault(finding.file, []).append(finding)
+result = ScanResult(findings=findings, files_scanned=data.get("files_scanned", 0), by_file=by_file)
+sys.stderr.write("\\n")
+sys.stderr.write(render_markdown(result))
+' >&2
 fi
 
 exit $SCAN_RC

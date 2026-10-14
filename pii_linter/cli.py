@@ -243,38 +243,7 @@ def _git_diff_staged(cwd: Path) -> list[tuple[str, int, str]]:
         )
     except (OSError, subprocess.SubprocessError):
         return []
-
-    out: list[tuple[str, int, str]] = []
-    current_file = ""
-    new_line = 0
-    for line in proc.stdout.splitlines():
-        if line.startswith("diff --git"):
-            # diff --git a/path/to/file b/path/to/file
-            try:
-                parts = line.split()
-                current_file = parts[2].lstrip("a/")
-            except IndexError:
-                current_file = ""
-            new_line = 0
-            continue
-        if line.startswith("--- "):
-            continue
-        if line.startswith("+++ "):
-            continue
-        if line.startswith("@@"):
-            # @@ -old_a,old_b +new_a,new_b @@
-            try:
-                plus = line.split("+", 1)[1]
-                num = plus.split(",", 1)[0].split(" ", 1)[0]
-                new_line = int(num)
-            except (IndexError, ValueError):
-                new_line = 0
-            continue
-        if line.startswith("+"):
-            if current_file and new_line:
-                out.append((current_file, new_line, line[1:]))
-            new_line += 1
-    return out
+    return _parse_diff(proc.stdout)
 
 
 def scan_staged(cwd: str | Path | None = None, suppressions_path=None) -> ScanResult:
@@ -312,6 +281,128 @@ def scan_staged(cwd: str | Path | None = None, suppressions_path=None) -> ScanRe
     return ScanResult(findings=findings, files_scanned=files_scanned, by_file=by_file)
 
 
+# ---------------------------------------------------------------------------
+# Push-range scan (used by the pre-push hook).
+# ---------------------------------------------------------------------------
+#
+# Cursor's bundled git extension injects ``core.hooksPath=/dev/null`` into
+# every subprocess it spawns (Source Control, integrated terminal, AI agent),
+# which silently bypasses ``pre-commit``. See ``docs/user-guide.md`` for the
+# full write-up. ``pre-push`` is the **second** wall: it fires on `git push`
+# from the user's *real* shell where the global hook is honored, and it
+# scans every line added by the commit range being pushed, so PII that
+# slipped through the bypassed pre-commit is still caught before it leaves
+# the machine. A new branch (``remote_sha == 0...0``) is treated as "all
+# reachable commits" so the first push of a topic branch is also covered.
+
+def _git_diff_range(
+    cwd: Path, base_sha: str, head_sha: str
+) -> list[tuple[str, int, str]]:
+    """Return added lines from ``git diff base_sha..head_sha``.
+
+    Same return contract as :func:`_git_diff_staged`. ``base_sha`` may be
+    the all-zeros SHA to mean "scan the whole history reachable from
+    ``head_sha``" (used when pushing a brand-new branch).
+    """
+    if not (cwd / ".git").exists():
+        return []
+    exe = shutil.which("git")
+    if exe is None:
+        return []
+    # All-zeros base: there is no remote ref. Use the empty tree so we
+    # still get a diff (every line in head_sha is "added").
+    if set(base_sha) == {"0"}:
+        base = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # git's empty tree
+    else:
+        base = base_sha
+    try:
+        proc = subprocess.run(
+            [exe, "diff", base, head_sha, "--unified=0", "--no-renames", "--no-color"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return _parse_diff(proc.stdout)
+
+
+def _parse_diff(diff_text: str) -> list[tuple[str, int, str]]:
+    """Shared parser for the ``unified=0`` diff format used by staged + push.
+
+    Extracted so the staged-diff and push-range scans share one code path
+    that the tests already cover. Returns ``(file, new_line_no, content)``.
+    """
+    out: list[tuple[str, int, str]] = []
+    current_file = ""
+    new_line = 0
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git"):
+            try:
+                parts = line.split()
+                current_file = parts[2].lstrip("a/")
+            except IndexError:
+                current_file = ""
+            new_line = 0
+            continue
+        if line.startswith("--- ") or line.startswith("+++ "):
+            continue
+        if line.startswith("@@"):
+            try:
+                plus = line.split("+", 1)[1]
+                num = plus.split(",", 1)[0].split(" ", 1)[0]
+                new_line = int(num)
+            except (IndexError, ValueError):
+                new_line = 0
+            continue
+        if line.startswith("+"):
+            if current_file and new_line:
+                out.append((current_file, new_line, line[1:]))
+            new_line += 1
+    return out
+
+
+def scan_pushed(
+    base_sha: str,
+    head_sha: str,
+    cwd: str | Path | None = None,
+    suppressions_path=None,
+) -> ScanResult:
+    """Scan lines added between ``base_sha`` and ``head_sha`` and return findings.
+
+    Used by the pre-push hook. Filter and dispatch are identical to
+    :func:`scan_staged` so a high finding in either mode has the same
+    severity/evidence shape.
+    """
+    root = Path(cwd) if cwd else Path.cwd()
+    sups = (
+        load_suppressions(suppressions_path)
+        if suppressions_path is not None
+        else []
+    )
+    findings: list[Finding] = []
+    by_file: dict[str, list[Finding]] = {}
+    files_scanned = 0
+    for file_path, lineno, text in _git_diff_range(root, base_sha, head_sha):
+        display_path = file_path.removeprefix("a/")
+        ext = Path(display_path).suffix.lower()
+        if ext not in _TARGET_EXTS:
+            continue
+        files_scanned += 1
+        if not text.strip():
+            continue
+        if is_suppressed("", text, sups):
+            continue
+        bucket: list[Finding] = []
+        for f in _dispatch_value(text, []):
+            bucket.append(replace(f, file=display_path, line_no=lineno))
+        if bucket:
+            by_file.setdefault(display_path, []).extend(bucket)
+            findings.extend(bucket)
+    return ScanResult(findings=findings, files_scanned=files_scanned, by_file=by_file)
+
+
 def _exit_for(findings: list[Finding]) -> int:
     if not findings:
         return 0
@@ -326,6 +417,19 @@ def _exit_for(findings: list[Finding]) -> int:
 def _cmd_scan(args: argparse.Namespace) -> int:
     if args.staged:
         result = scan_staged(suppressions_path=args.suppressions)
+    elif args.pushed_base is not None or args.pushed_head is not None:
+        # Both refs must be supplied; the parser's mutually-exclusive group
+        # is for staged vs path, not pushed-vs-the-rest, so we validate here.
+        if not (args.pushed_base and args.pushed_head):
+            sys.stderr.write(
+                "Error: --pushed needs both --pushed-base and --pushed-head.\n"
+            )
+            return EX_USAGE
+        result = scan_pushed(
+            args.pushed_base,
+            args.pushed_head,
+            suppressions_path=args.suppressions,
+        )
     else:
         result = scan_path(args.path, suppressions_path=args.suppressions)
     if args.format == "json":
@@ -457,6 +561,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Scan only the lines introduced by `git diff --cached` "
              "(used by the pre-commit hook). Implies no positional PATH.",
+    )
+    p_scan.add_argument(
+        "--pushed-base",
+        default=None,
+        help="Base SHA for push-range scan. Pairs with --pushed-head. "
+             "Used by the pre-push hook. Pass the all-zeros SHA "
+             "(0000...000) to scan the whole reachable history of head.",
+    )
+    p_scan.add_argument(
+        "--pushed-head",
+        default=None,
+        help="Head SHA for push-range scan. Pairs with --pushed-base.",
     )
     p_scan.set_defaults(func=_cmd_scan)
 

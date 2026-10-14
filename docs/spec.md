@@ -74,6 +74,35 @@ class Suppression:
 `SEVERITY_BY_ENTITY` lives in [`pii_linter/severity.py`](../pii_linter/severity.py)
 and is the single source of truth.
 
+## Pre-commit hook block output (UX contract)
+
+When `pii-lint init` is installed and a `git commit` introduces
+HIGH/CRITICAL PII, the pre-commit hook prints **two things** to
+stderr and aborts the commit:
+
+1. **Un-stage message** — names the offending file(s) and runs
+   `git reset HEAD -- <file>` so the row is no longer in the
+   index waiting to leak on the next commit. The file itself is
+   not deleted; the user can re-add it after redaction.
+2. **Inline Markdown report** — the same output
+   `pii-lint scan --staged` would print, with a `file:line`
+   cursor, masked evidence, and per-entity suggestions. The
+   report goes to stderr (not stdout) so git's commit-message
+   machinery is not corrupted.
+
+The inline report is built by feeding the JSON scan output back
+into the same `render_markdown` helper `pii-lint scan` uses, so
+the two outputs are byte-identical. Raw PII (`evidence_raw`) is
+**never** read from the JSON and **never** written to stderr;
+only the pre-masked `evidence_masked` form is printed.
+
+A clean scan prints nothing from the hook. A HIGH/CRITICAL
+finding that survives `--no-verify` is the user's responsibility,
+not the hook's.
+
+See [`docs/pre-commit-output.md`](pre-commit-output.md) for the
+full block-message format and worked examples.
+
 ## Public functions
 
 | Function | Where | Purpose |
