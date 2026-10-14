@@ -67,7 +67,7 @@ tool you used the first time:
 
 ```bash
 # pipx install (recommended)
-pipx upgrade pii-linter
+pipx install --force git+https://github.com/angWindy/vn-pii
 
 # pip install into the env that already has it
 pip install --upgrade pii-linter
