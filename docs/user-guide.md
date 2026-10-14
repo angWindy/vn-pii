@@ -20,81 +20,75 @@ other repos on your machine are left alone until you opt them in too.
 
 ## Install
 
-### TL;DR — pick one
+PII Linter is a zero-dependency Python 3.11+ package. The package name
+is `pii-linter` (with `-er`); the CLI binary is `pii-lint` (no `-er`).
+`pip install pii-lint` fails with `No matching distribution found` —
+the most common install mistake.
+
+### One-liner (recommended)
 
 ```bash
-# (A) One-liner: pulls the package and runs `pii-lint init` for you.
+cd ~/Dev/the-repo-you-want-to-protect
 curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
+```
 
-# (B) pipx, isolated CLI (recommended if you want it in your $PATH)
+This picks a Python 3.11+ interpreter, installs with `pipx` (else a
+private venv at `~/.local/share/pii-lint/venv`), and runs
+`pii-lint init` in the current directory. The hook fires only for
+that repo; to protect others, `cd` into each one and run
+`pii-lint init` again.
+
+### Install in an env you already manage
+
+```bash
+# pipx (isolated, recommended)
 pipx install git+https://github.com/angWindy/vn-pii
-pii-lint init
+pii-lint init                       # in each repo you want to protect
 
-# (C) pip into a venv / conda env you already manage
-python -m venv .venv && source .venv/bin/activate          # or: conda activate myenv
+# venv or conda env (any Python 3.11+)
+python3 -m venv .venv && source .venv/bin/activate
 pip install git+https://github.com/angWindy/vn-pii
 pii-lint init
 ```
 
-All three end with `pii-lint init`, which writes the hook into the
-current repo's `.git/hooks/`. After that, `git commit` in this repo is
-scanned. Other repos on the machine are NOT scanned — run `pii-lint
-init` inside each repo you want to protect.
+`pip install` on its own does **not** enable the hook — `init` must
+be run in every repo you want to protect (per-repo opt-in; the old
+global `core.hooksPath` model was removed in Slice 2).
 
-### The one command
+### Verify
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
+pii-lint --help                                              # 5 subcommands
+python -c "import pii_linter; print(pii_linter.__version__)"  # 0.1.0
+pii-lint init --dry-run                                      # what would be written
+ls .git/hooks/                                               # pre-commit, pre-push, pii-lint-resolver.sh
 ```
 
-This picks a Python 3.11+ interpreter, installs the package with `pipx`
-(falling back to `pip`), and runs `pii-lint init` in the directory you
-were in when you ran the script. The hook fires only for that repo; to
-protect others, `cd` into each one and run `pii-lint init` again.
+### Doing it in two steps (multi-repo)
 
-Verify:
-
-```bash
-python -c "import pii_linter; print(pii_linter.__version__)"   # -> 0.1.0
-pii-lint init --dry-run                                       # what it would write
-ls .git/hooks/                                                # pre-commit is there
-```
-
-### Doing it in two steps
-
-`pip install` on its own does **not** enable the hook: pip has no
-post-install script mechanism (PEP 660 metadata is written but no code is
-executed), so `init` has to be invoked explicitly, and it has to be
-run **in every repo you want to protect**:
+After `pipx install` (or `pip install` in an env you already manage),
+run `pii-lint init` in every repo you want to protect — `pip` has
+no post-install hook, so the per-repo opt-in is manual:
 
 ```bash
-pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
-cd ~/Dev/some-repo
-pii-lint init
-cd ../another-repo
-pii-lint init
+pipx install git+https://github.com/angWindy/vn-pii
+for d in ~/Dev/*/; do (cd "$d" && pii-lint init); done
 ```
 
 `pipx` is preferred because it keeps the tool out of your project
-environments. Any Python 3.11+ env works — a conda env, a virtualenv, or
-on macOS/Windows the plain system Python. Zero runtime dependencies.
+environments. Any Python 3.11+ env works — conda, venv, or even
+system Python. Zero runtime dependencies.
 
 ### If you hit `error: externally-managed-environment`
 
-That error comes from Debian/Ubuntu marking the **system** Python as
-externally managed (PEP 668). It is the OS protecting itself; nothing is
-wrong with this tool. It applies only to the bare system interpreter, so any
-of these is enough — no `--break-system-packages`:
+Ubuntu/Debian mark the system Python as externally managed (PEP 668).
+Install into an env you own, with no `--break-system-packages`:
 
 ```bash
-conda activate pii                       # a conda env
-python3 -m venv .venv && source .venv/bin/activate
 pipx install git+https://github.com/angWindy/vn-pii
+# or: python3 -m venv .venv && source .venv/bin/activate
+# or: conda activate myenv
 ```
-
-The pre-commit hook below runs `python -m pii_linter`, not the `pii-lint`
-script, so it keeps working from any shell — you do **not** need to activate
-an environment before every `git commit`.
 
 ### Contributor (this repo)
 
@@ -561,10 +555,12 @@ So if you `conda create -n team_lint python=3.11 && pip install pii-linter`
 into it, the next commit picks up that env without `pii-lint init`.
 The same goes for any other env name under the search roots.
 
-To add a brand-new search root, edit `SEARCH_ROOTS` in
-`<repo>/.git/hooks/pii-lint-resolver.sh` (or your `~/.githooks/...`
-if you still keep a legacy global install around) and re-run
-`pii-lint init`.
+To add a brand-new search root, edit `SEARCH_ROOTS` in the
+`pii-lint-resolver.sh` script that lives next to `pre-commit` in
+this repo's `.git/hooks/`. Note that each repo where you ran
+`pii-lint init` has its own copy of the resolver, so the change
+applies only to that repo — re-run `pii-lint init` in any other
+repo where you want the new root picked up.
 
 Bypass once with `git commit --no-verify` if you are mid-rebase and cannot
 fix the hook right now.

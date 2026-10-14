@@ -36,17 +36,29 @@ commands (Cursor, Aider, Claude Code).
 > [docs/user-guide.md §Install](docs/user-guide.md#install) for the
 > full instructions.
 
-## Quick start — Use in any project
+## Quick start
 
 ```bash
+cd ~/Dev/the-repo-you-want-to-protect
 curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
-pii-lint path/to/your/dataset
 ```
 
-The installer picks an isolated environment for you (`pipx`, else a private
-venv) and runs `pii-lint init` in the current directory; see
-[Quick start](#quick-start) for what that means and how to enable the
-hook in more repos.
+The installer picks an isolated env for you (`pipx`, else a private
+venv at `~/.local/share/pii-lint/venv`) and runs `pii-lint init` in
+the current directory. From then on, **in that repo**:
+
+```bash
+git add data.csv && git commit -m "add Q4 rows"
+```
+
+scans the staged lines and **blocks the commit** on HIGH or
+CRITICAL PII, printing a masked report. To protect another repo,
+`cd` into it and run `pii-lint init` again — or loop over your
+dev tree:
+
+```bash
+for d in ~/Dev/*/; do (cd "$d" && pii-lint init); done
+```
 
 #### Upgrading an existing install
 
@@ -143,36 +155,6 @@ pytest tests/
 
 The optional `[dev]` extra pulls `Faker` (for the fixture generator) and
 `pytest`. They are not part of the runtime footprint.
-
-## Quick start — opt each repo in
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/angWindy/vn-pii/main/install.sh | sh
-```
-
-That installs the package and runs `pii-lint init` in the directory
-you were in when you ran the script. From then on, **in that repo**,
-
-```bash
-git add data.csv && git commit -m "add Q4 rows"
-```
-
-scans the staged lines and **blocks the commit** if it contains HIGH or
-CRITICAL PII, printing a masked report to your terminal. To enable the
-hook in another repo, `cd` into it and run `pii-lint init` again — or
-loop over your dev tree:
-
-```bash
-for d in ~/Dev/*/; do (cd "$d" && pii-lint init); done
-```
-
-Prefer two steps? Same result:
-
-```bash
-pipx install git+https://github.com/angWindy/vn-pii   # or: pip install ...
-cd path/to/your/repo
-pii-lint init                                          # install the hook in THIS repo
-```
 
 | Command | Effect |
 |---|---|
